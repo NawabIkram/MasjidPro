@@ -4,9 +4,9 @@ import { Link } from "react-router-dom";
 import { pricingPlans } from "../data/mockData";
 
 const publicStats = [
-  { label: "Target MRR", value: "$2k" },
-  { label: "Launch clients", value: "20" },
-  { label: "Demo time", value: "8 min" },
+  { label: "Donation workflows", value: "5+" },
+  { label: "Masjid dashboards", value: "Multi" },
+  { label: "Admin modules", value: "6" },
 ];
 
 export function MarketingPage() {
@@ -28,8 +28,8 @@ export function MarketingPage() {
 
       <section className="public-hero">
         <div>
-          <span className="eyebrow">Phase 2 launch ready</span>
-          <h1>Convert masjid beta users into paying SaaS clients.</h1>
+          <span className="eyebrow">MasjidPro for Islamic centers</span>
+          <h1>Run donations, prayer times, and community updates from one trusted dashboard.</h1>
           <p>
             MasjidPro gives Islamic centers a polished dashboard for donations, receipts, prayer
             times, announcements, reports, and donor trust without spreadsheet chaos.
@@ -74,8 +74,8 @@ export function MarketingPage() {
       <section className="case-study-strip">
         <CheckCircle2 size={22} />
         <p>
-          Beta conversion script: offer 50% off first month, onboard donor data, publish one case
-          study, and move qualified centers to the Growth plan.
+          Built for secure payment records, privacy-aware donor management, clear receipts, and
+          simple reporting your masjid team can trust.
         </p>
       </section>
     </main>
