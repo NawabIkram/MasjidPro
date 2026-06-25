@@ -7,7 +7,6 @@ import { DemoPage } from "./pages/DemoPage";
 import { DonationsPage } from "./pages/DonationsPage";
 import { DonorPortalPage } from "./pages/DonorPortalPage";
 import { DonorsPage } from "./pages/DonorsPage";
-import { LaunchPage } from "./pages/LaunchPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MarketingPage } from "./pages/MarketingPage";
 import { PrayerTimesPage } from "./pages/PrayerTimesPage";
@@ -26,7 +25,6 @@ export default function App() {
       <Route path="/checkout/:planId" element={<CheckoutPage />} />
       <Route element={<AppShell />}>
         <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/launch" element={<LaunchPage />} />
         <Route path="/donations" element={<DonationsPage />} />
         <Route path="/zakat" element={<ZakatPage />} />
         <Route path="/prayer-times" element={<PrayerTimesPage />} />
