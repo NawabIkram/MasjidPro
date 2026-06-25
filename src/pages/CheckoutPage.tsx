@@ -27,9 +27,9 @@ export function CheckoutPage() {
 
       <section className="checkout-grid">
         <section className="checkout-form">
-          <span className="eyebrow">Stripe-style checkout</span>
+          <span className="eyebrow">Secure checkout</span>
           <h1>Activate {selectedPlan.name}</h1>
-          <p>This is a safe Phase 2 checkout simulation. Real Stripe keys can plug in later.</p>
+          <p>Review your plan, confirm billing details, and activate your MasjidPro workspace.</p>
           <div className="form-grid two">
             <label><span>Masjid name</span><input defaultValue="Masjid Al-Furqan" /></label>
             <label><span>Admin email</span><input defaultValue="admin@masjid.org" /></label>
