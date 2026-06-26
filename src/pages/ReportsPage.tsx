@@ -2,43 +2,54 @@
 import { Badge, Card, EmptyState, LoadingSkeleton, ProgressBar, SectionHeader, Modal, Toast } from "../components/ui";
 import { donors, fundBreakdown, monthlyDonations, recurringTrend, reportMetrics } from "../data/mockData";
 import { currency } from "../utils/format";
-import { useState } from "react";
-import { generateAIJson } from "../lib/gemini";
+import { useEffect, useState } from "react";
 import { useLanguage } from "../i18n/i18n";
 import { downloadCsv, downloadSimplePdf } from "../utils/downloads";
-
-const maxMonthly = Math.max(...monthlyDonations.map((item) => item.amount));
-const maxRecurring = Math.max(...recurringTrend.map((item) => item.donors));
-
-interface AIReportResult {
-  title: string;
-  summary: string;
-  insights: string[];
-  recommendations: string[];
-}
+import { generateReportSummary, getReports, type AIReportResult, type ReportsApiData } from "../services/api";
 
 export function ReportsPage() {
   const { t } = useLanguage();
+  const [reportData, setReportData] = useState<ReportsApiData>({
+    reportMetrics,
+    monthlyDonations,
+    recurringTrend,
+    fundBreakdown,
+    topDonors: donors,
+  });
+  const [loading, setLoading] = useState(true);
   const [showAiModal, setShowAiModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportResult, setReportResult] = useState<AIReportResult | null>(null);
   const [toast, setToast] = useState("");
+  const maxMonthly = Math.max(...reportData.monthlyDonations.map((item) => item.amount));
+  const maxRecurring = Math.max(...reportData.recurringTrend.map((item) => item.donors));
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    getReports()
+      .then((data) => {
+        if (mounted) {
+          setReportData(data);
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   async function generateAIReport() {
     setIsGenerating(true);
     setToast("AI is analyzing your donation data...");
 
     try {
-      const prompt = `Analyze the current masjid donation and operational data to generate a comprehensive monthly report for the board of directors. Highlight trends, anomalies, and actionable steps.`;
-      const schemaDescription = `
-      {
-        "title": "A professional title for the report (e.g. June 2026 Board Summary)",
-        "summary": "A 3-4 sentence high-level executive summary of the masjid's financial and operational health.",
-        "insights": ["Array of 3-4 specific data insights (e.g., 'Zakat grew 10% but Sadaqah dropped by 5%')"],
-        "recommendations": ["Array of 2-3 actionable steps for the administration to take based on the data"]
-      }`;
-
-      const result = await generateAIJson<AIReportResult>(prompt, schemaDescription);
+      const result = await generateReportSummary();
       setReportResult(result);
       setToast("AI report generated successfully!");
     } catch (error: any) {
@@ -52,7 +63,7 @@ export function ReportsPage() {
     downloadCsv(
       "masjidpro-monthly-report.csv",
       ["Metric", "Value", "Change"],
-      reportMetrics.map((metric) => [metric.label, metric.value, `${metric.change}%`]),
+      reportData.reportMetrics.map((metric) => [metric.label, metric.value, `${metric.change}%`]),
     );
     setToast("CSV report downloaded.");
   }
@@ -62,13 +73,13 @@ export function ReportsPage() {
       "masjidpro-monthly-report.pdf",
       "MasjidPro Monthly Report",
       [
-        ...reportMetrics.map((metric) => `${metric.label}: ${metric.value} (+${metric.change}%)`),
+        ...reportData.reportMetrics.map((metric) => `${metric.label}: ${metric.value} (+${metric.change}%)`),
         "",
         "Monthly donations:",
-        ...monthlyDonations.map((item) => `${item.month}: ${currency(item.amount)}`),
+        ...reportData.monthlyDonations.map((item) => `${item.month}: ${currency(item.amount)}`),
         "",
         "Fund distribution:",
-        ...fundBreakdown.map((fund) => `${fund.fund}: ${currency(fund.amount)} (${fund.percentage}%)`),
+        ...reportData.fundBreakdown.map((fund) => `${fund.fund}: ${currency(fund.amount)} (${fund.percentage}%)`),
       ],
     );
     setToast("PDF report downloaded.");
@@ -122,7 +133,8 @@ export function ReportsPage() {
       </div>
 
       <div className="stats-grid four">
-        {reportMetrics.map((metric) => (
+        {loading ? <LoadingSkeleton rows={2} /> : null}
+        {reportData.reportMetrics.map((metric) => (
           <Card className="metric-card" key={metric.label}>
             <span>{metric.label}</span>
             <strong>{metric.label.includes("Donor Retention") ? `${metric.value}%` : currency(metric.value)}</strong>
@@ -135,7 +147,7 @@ export function ReportsPage() {
         <Card>
           <SectionHeader title="Monthly Donations Chart" eyebrow="Last 6 months" />
           <div className="bar-chart">
-            {monthlyDonations.map((item) => (
+            {reportData.monthlyDonations.map((item) => (
               <div className="bar-column" key={item.month}>
                 <span style={{ height: `${(item.amount / maxMonthly) * 100}%` }} />
                 <strong>{item.month}</strong>
@@ -148,7 +160,7 @@ export function ReportsPage() {
         <Card>
           <SectionHeader title="Fund Distribution" eyebrow="By category" />
           <div className="fund-list">
-            {fundBreakdown.map((fund) => (
+            {reportData.fundBreakdown.map((fund) => (
               <div className="fund-row" key={fund.fund}>
                 <div>
                   <strong>{fund.fund}</strong>
@@ -165,7 +177,7 @@ export function ReportsPage() {
         <Card>
           <SectionHeader title="Top Donors" eyebrow="This month" />
           <div className="top-donor-list">
-            {donors.map((donor, index) => (
+            {reportData.topDonors.map((donor, index) => (
               <div className="top-donor" key={donor.id}>
                 <span>{index + 1}</span>
                 <div>
@@ -181,7 +193,7 @@ export function ReportsPage() {
         <Card>
           <SectionHeader title="Recurring Donations Trend" eyebrow="Active donors" />
           <div className="line-chart">
-            {recurringTrend.map((item) => (
+            {reportData.recurringTrend.map((item) => (
               <div className="trend-point" key={item.month}>
                 <span style={{ height: `${(item.donors / maxRecurring) * 100}%` }} />
                 <small>{item.month}</small>
