@@ -1,11 +1,11 @@
-﻿import { useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Download, FileText, MoreHorizontal, Plus, Search, ShieldCheck, Sparkles, Loader2 } from "lucide-react";
-import { Badge, Card, EmptyState, Modal, SectionHeader, StatCard, Toast } from "../components/ui";
+import { Badge, Card, EmptyState, LoadingSkeleton, Modal, SectionHeader, StatCard, Toast } from "../components/ui";
 import { donations } from "../data/mockData";
 import type { Donation, DonationStatus, FundType } from "../types";
 import { downloadCsv, downloadReceipt, downloadSimplePdf } from "../utils/downloads";
 import { currency } from "../utils/format";
-import { generateAIJson } from "../lib/gemini";
+import { createDonation, generateCampaignCopy, getDonations, type AICampaignResult } from "../services/api";
 
 const funds: Array<FundType | "All"> = ["All", "Zakat", "Sadaqah", "General", "Building"];
 const statuses: Array<DonationStatus | "All"> = ["All", "Completed", "Pending", "Refunded"];
@@ -16,17 +16,9 @@ function statusTone(status: DonationStatus): "green" | "gold" | "red" {
   return "red";
 }
 
-interface AICampaignResult {
-  title: string;
-  description: string;
-  email: string;
-  sms: string;
-  push: string;
-  social: string;
-}
-
 export function DonationsPage() {
   const [records, setRecords] = useState<Donation[]>(donations);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [fund, setFund] = useState<FundType | "All">("All");
   const [status, setStatus] = useState<DonationStatus | "All">("All");
@@ -49,6 +41,26 @@ export function DonationsPage() {
   const [campaignGoal, setCampaignGoal] = useState("");
   const [aiCampaignResult, setAiCampaignResult] = useState<AICampaignResult | null>(null);
   const [campaignTab, setCampaignTab] = useState<keyof AICampaignResult>("email");
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    getDonations()
+      .then((data) => {
+        if (mounted) {
+          setRecords(data);
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const visibleDonations = useMemo(() => {
     return records.filter((donation) => {
@@ -93,17 +105,11 @@ export function DonationsPage() {
     setToast("PDF export downloaded.");
   }
 
-  function recordDonation() {
-    const next: Donation = {
-      id: `don-${Date.now()}`,
-      receiptId: `RCPT-${Math.floor(1000 + Math.random() * 9000)}`,
-      date: "Today",
-      refundStatus: "Not requested",
-      ...newDonation,
-    };
+  async function recordDonation() {
+    const next = await createDonation(newDonation);
     setRecords((current) => [next, ...current]);
     setShowAddModal(false);
-    setToast("Donation recorded and receipt generated.");
+    setToast("Donation recorded through backend and receipt generated.");
   }
 
   async function generateAICampaign() {
@@ -116,18 +122,7 @@ export function DonationsPage() {
     setToast("AI is generating campaign materials...");
 
     try {
-      const prompt = `Create a comprehensive fundraising campaign for the masjid.\nTopic: ${campaignTopic}\nGoal: ${campaignGoal}`;
-      const schemaDescription = `
-      {
-        "title": "A short, inspiring title for the campaign",
-        "description": "A 2-3 sentence engaging description of the campaign and its impact",
-        "email": "A full HTML/rich-text style email appealing to donors",
-        "sms": "A short SMS message under 160 chars with a call to action",
-        "push": "A very short push notification alert",
-        "social": "A social media post including hashtags and emojis"
-      }`;
-
-      const result = await generateAIJson<AICampaignResult>(prompt, schemaDescription);
+      const result = await generateCampaignCopy(campaignTopic, campaignGoal);
       setAiCampaignResult(result);
       setToast("Campaign materials generated successfully!");
     } catch (error: any) {
@@ -225,7 +220,9 @@ export function DonationsPage() {
 
       <Card>
         <SectionHeader title="All Donations" />
-        {visibleDonations.length === 0 ? (
+        {loading ? (
+          <LoadingSkeleton rows={4} />
+        ) : visibleDonations.length === 0 ? (
           <EmptyState title="No donations yet" description="Try a different filter or add the first donation record." />
         ) : (
           <>
