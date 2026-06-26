@@ -1,8 +1,11 @@
 import { BellRing, CreditCard, LockKeyhole, MapPin, ShieldCheck, Upload, UsersRound } from "lucide-react";
 import type { ElementType } from "react";
-import { Card, SectionHeader, TrustStrip } from "../components/ui";
+import { useState } from "react";
+import { Card, SectionHeader, Toast, TrustStrip } from "../components/ui";
 
 export function SettingsPage() {
+  const [toast, setToast] = useState("");
+
   return (
     <div className="page-stack">
       <div className="page-title-row">
@@ -10,7 +13,7 @@ export function SettingsPage() {
           <span className="eyebrow">Settings</span>
           <h1>Manage masjid profile, payment, notification, team, and security settings.</h1>
         </div>
-        <button className="primary-button" type="button">Save Settings</button>
+        <button className="primary-button" type="button" onClick={() => setToast("Workspace settings saved.")}>Save Settings</button>
       </div>
 
       <div className="settings-grid">
@@ -18,7 +21,7 @@ export function SettingsPage() {
           <SectionHeader title="Masjid Profile" eyebrow="Workspace identity" />
           <div className="form-grid two">
             <label><span>Masjid name</span><input defaultValue="Masjid Al-Furqan" /></label>
-            <label><span>Logo upload</span><button className="secondary-button full" type="button"><Upload size={16} /> Upload logo</button></label>
+            <label><span>Logo upload</span><button className="secondary-button full" type="button" onClick={() => setToast("Logo upload queued for review.")}><Upload size={16} /> Upload logo</button></label>
             <label><span>Location</span><input defaultValue="Houston, TX" /></label>
             <label><span>Timezone</span><input defaultValue="America/Chicago" /></label>
           </div>
@@ -52,10 +55,11 @@ export function SettingsPage() {
           </div>
           <div className="info-box">
             <ShieldCheck size={20} />
-            <p>Donation audit log and receipt confirmation are enabled for Phase 1 trust signals.</p>
+            <p>Donation audit log and receipt confirmation are enabled for reliable community records.</p>
           </div>
         </Card>
       </div>
+      {toast ? <Toast message={toast} onClose={() => setToast("")} /> : null}
     </div>
   );
 }
