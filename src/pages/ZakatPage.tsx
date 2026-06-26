@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Calculator, CreditCard, Info, ReceiptText } from "lucide-react";
-import { Badge, Card, ProgressBar, SectionHeader, TrustStrip } from "../components/ui";
+import { Badge, Card, ProgressBar, SectionHeader, Toast, TrustStrip } from "../components/ui";
+import { downloadSimplePdf } from "../utils/downloads";
 import { currency } from "../utils/format";
 
 const fields = [
@@ -15,6 +16,7 @@ const fields = [
 type FieldKey = (typeof fields)[number]["key"];
 
 export function ZakatPage() {
+  const [toast, setToast] = useState("");
   const [values, setValues] = useState<Record<FieldKey, number>>({
     cash: 8500,
     gold: 4200,
@@ -34,6 +36,17 @@ export function ZakatPage() {
   const nisab = 6200;
   const aboveNisab = totals.net >= nisab;
 
+  function recordPayment() {
+    downloadSimplePdf("masjidpro-zakat-record.pdf", "MasjidPro Zakat Record", [
+      `Total assets: ${currency(totals.assets)}`,
+      `Deductions: ${currency(values.debts)}`,
+      `Net wealth: ${currency(totals.net)}`,
+      `Zakat due: ${currency(totals.due)}`,
+      `Nisab status: ${aboveNisab ? "Above Nisab" : "Below Nisab"}`,
+    ]);
+    setToast("Zakat payment record downloaded.");
+  }
+
   return (
     <div className="page-stack">
       <div className="page-title-row">
@@ -41,7 +54,7 @@ export function ZakatPage() {
           <span className="eyebrow">Zakat Calculator</span>
           <h1>Calculate, explain, and record Zakat with a clear donor-ready breakdown.</h1>
         </div>
-        <button className="primary-button" type="button">
+        <button className="primary-button" type="button" onClick={recordPayment}>
           <ReceiptText size={18} />
           Record Zakat Payment
         </button>
@@ -67,7 +80,7 @@ export function ZakatPage() {
               </label>
             ))}
           </div>
-          <button className="secondary-button full" type="button">
+          <button className="secondary-button full" type="button" onClick={() => setToast(`Zakat recalculated: ${currency(totals.due)} due.`)}>
             <Calculator size={18} />
             Recalculate Zakat
           </button>
@@ -86,7 +99,7 @@ export function ZakatPage() {
             <div><span>Net wealth</span><strong>{currency(totals.net)}</strong></div>
             <div><span>Zakat rate</span><strong>2.5%</strong></div>
           </div>
-          <button className="primary-button full" type="button">
+          <button className="primary-button full" type="button" onClick={recordPayment}>
             <CreditCard size={18} />
             Pay Now via MasjidPro
           </button>
@@ -106,6 +119,7 @@ export function ZakatPage() {
         </Card>
         <TrustStrip />
       </div>
+      {toast ? <Toast message={toast} onClose={() => setToast("")} /> : null}
     </div>
   );
 }
