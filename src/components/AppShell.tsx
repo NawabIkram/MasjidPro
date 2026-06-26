@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
@@ -31,6 +31,7 @@ import type { Masjid, UserRole } from "../types";
 import { AiAssistant } from "./AiAssistant";
 import { useLanguage } from "../i18n/i18n";
 import { Modal, Toast } from "./ui";
+import { getMasjids } from "../services/api";
 
 const adminNavItems = [
   { to: "/dashboard", key: "nav_dashboard", mobileKey: "mobile_home", icon: LayoutDashboard },
@@ -65,12 +66,27 @@ export function AppShell() {
   );
   const [collapsed, setCollapsed] = useState(false);
   const [activeRole, setActiveRole] = useState<UserRole>(startsAsDonor ? "donor" : "admin");
+  const [availableMasjids, setAvailableMasjids] = useState<Masjid[]>(masjids);
   const [activeMasjid, setActiveMasjid] = useState<Masjid>(masjids[0]);
   const [showSearch, setShowSearch] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [toast, setToast] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const navItems = activeRole === "admin" ? adminNavItems : donorNavItems;
+
+  useEffect(() => {
+    let mounted = true;
+    getMasjids().then((data) => {
+      if (mounted && data.length > 0) {
+        setAvailableMasjids(data);
+        setActiveMasjid((current) => data.find((masjid) => masjid.id === current.id) ?? data[0]);
+      }
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const title = useMemo(() => {
     const active = [...adminNavItems, ...donorNavItems].find((item) => item.to === location.pathname);
@@ -129,11 +145,11 @@ export function AppShell() {
             <select
               value={activeMasjid.id}
               onChange={(event) => {
-                const next = masjids.find((masjid) => masjid.id === event.target.value);
+                const next = availableMasjids.find((masjid) => masjid.id === event.target.value);
                 if (next) setActiveMasjid(next);
               }}
             >
-              {masjids.map((masjid) => (
+              {availableMasjids.map((masjid) => (
                 <option key={masjid.id} value={masjid.id}>
                   {masjid.name}
                 </option>
@@ -222,11 +238,11 @@ export function AppShell() {
                 <select
                   value={activeMasjid.id}
                   onChange={(event) => {
-                    const next = masjids.find((masjid) => masjid.id === event.target.value);
+                    const next = availableMasjids.find((masjid) => masjid.id === event.target.value);
                     if (next) setActiveMasjid(next);
                   }}
                 >
-                  {masjids.map((masjid) => (
+                  {availableMasjids.map((masjid) => (
                     <option key={masjid.id} value={masjid.id}>{masjid.name}</option>
                   ))}
                 </select>
