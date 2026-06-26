@@ -1,30 +1,107 @@
+﻿import { Eye, Megaphone, Send, Sparkles, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Eye, Megaphone, Send, Sparkles } from "lucide-react";
-import { announcements } from "../data/mockData";
 import { Badge, Card, ConfirmDialog, EmptyState, LoadingSkeleton, SectionHeader, Toast } from "../components/ui";
-import type { AnnouncementStatus } from "../types";
+import { announcements } from "../data/mockData";
+import type { Announcement, AnnouncementStatus } from "../types";
+import { generateAIJson } from "../lib/gemini";
+import { useLanguage } from "../i18n/i18n";
 
-function tone(status: AnnouncementStatus): "green" | "blue" | "neutral" {
-  if (status === "Published") return "green";
-  if (status === "Scheduled") return "blue";
-  return "neutral";
+interface AIAnnouncementResult {
+  title: string;
+  english: string;
+  urdu: string;
+  arabic: string;
+  sms: string;
+  whatsapp: string;
+  email: string;
 }
 
 export function AnnouncementsPage() {
-  const [title, setTitle] = useState("Ramadan Fundraiser Reminder");
-  const [message, setMessage] = useState(
-    "Help us complete the Ramadan Fundraiser by setting up a recurring Sadaqah gift before Jumuah.",
-  );
+  const { t } = useLanguage();
+  const [items, setItems] = useState(announcements);
+  const [title, setTitle] = useState("");
+  const [message, setMessage] = useState("");
+  const [category, setCategory] = useState<Announcement["category"]>("Community");
   const [audience, setAudience] = useState("Everyone");
-  const [schedule, setSchedule] = useState("Jun 21, 2026 09:00 AM");
+  const [channels, setChannels] = useState<Announcement["channels"]>(["Email", "Push"]);
+  const [schedule, setSchedule] = useState("Today, 2:00 PM");
   const [draftStatus, setDraftStatus] = useState<AnnouncementStatus>("Draft");
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [toast, setToast] = useState("");
   const [statusFilter, setStatusFilter] = useState<AnnouncementStatus | "All">("All");
+
+  const [toast, setToast] = useState("");
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  // AI States
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedContent, setGeneratedContent] = useState<AIAnnouncementResult | null>(null);
+  const [previewTab, setPreviewTab] = useState<keyof AIAnnouncementResult>("english");
+
+  function tone(status: AnnouncementStatus) {
+    if (status === "Published") return "green";
+    if (status === "Scheduled") return "blue";
+    return "neutral";
+  }
+
   const filtered = useMemo(
-    () => announcements.filter((announcement) => statusFilter === "All" || announcement.status === statusFilter),
-    [statusFilter],
+    () => (statusFilter === "All" ? items : items.filter((item) => item.status === statusFilter)),
+    [items, statusFilter],
   );
+
+  function toggleChannel(channel: Announcement["channels"][number]) {
+    setChannels((current) =>
+      current.includes(channel) ? current.filter((item) => item !== channel) : [...current, channel],
+    );
+  }
+
+  function saveAnnouncement(status: AnnouncementStatus) {
+    const nextAnnouncement: Announcement = {
+      id: `ann-${Date.now()}`,
+      title,
+      category,
+      excerpt: generatedContent ? generatedContent.english : message,
+      status,
+      date: status === "Draft" ? "Draft" : schedule,
+      channels,
+      reach: status === "Published" ? 1240 : 0,
+    };
+
+    setItems((current) => [nextAnnouncement, ...current]);
+    setDraftStatus(status);
+    setToast(status === "Published" ? "Announcement published successfully." : "Announcement saved as draft.");
+  }
+
+  async function handleAIGenerate() {
+    if (!title && !message) {
+      setToast("Please enter a rough title or message first.");
+      return;
+    }
+
+    setIsGenerating(true);
+    setToast("AI is crafting the announcement in multiple languages...");
+
+    try {
+      const prompt = `Write a comprehensive community announcement for the masjid based on this rough draft:\nTitle: ${title}\nNotes: ${message}\nAudience: ${audience}\nCategory: ${category}`;
+      const schemaDescription = `
+      {
+        "title": "A catchy and respectful English title",
+        "english": "Full English announcement body suitable for an email or newsletter",
+        "urdu": "Full Urdu translation of the announcement body",
+        "arabic": "Full Arabic translation of the announcement body",
+        "sms": "A concise SMS version under 160 characters",
+        "whatsapp": "A WhatsApp version using bolding and emojis",
+        "email": "An HTML/rich-text style email format"
+      }`;
+
+      const result = await generateAIJson<AIAnnouncementResult>(prompt, schemaDescription);
+      setGeneratedContent(result);
+      setTitle(result.title);
+      setToast("AI announcement generated successfully!");
+    } catch (error: any) {
+      setToast(error.message || "Failed to generate AI content.");
+    } finally {
+      setIsGenerating(false);
+    }
+  }
 
   return (
     <div className="page-stack">
@@ -33,7 +110,17 @@ export function AnnouncementsPage() {
           <span className="eyebrow">Announcements</span>
           <h1>Draft, preview, schedule, and broadcast community updates.</h1>
         </div>
-        <button className="primary-button" type="button">
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => {
+            setTitle("");
+            setMessage("");
+            setGeneratedContent(null);
+            setDraftStatus("Draft");
+            setToast("New announcement draft started.");
+          }}
+        >
           <Megaphone size={18} />
           Create Announcement
         </button>
@@ -41,16 +128,16 @@ export function AnnouncementsPage() {
 
       <div className="announce-layout">
         <Card>
-          <SectionHeader title="AI Announcement Writer" eyebrow="Draft assistant" />
+          <SectionHeader title="Live AI Announcement Writer" eyebrow="Draft assistant" />
           <div className="form-grid">
             <label>
-              <span>Title</span>
-              <input value={title} onChange={(event) => setTitle(event.target.value)} />
+              <span>Topic / Draft Title</span>
+              <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Jumuah parking reminder" />
             </label>
             <div className="form-grid two">
               <label>
                 <span>Category</span>
-                <select defaultValue="Fundraiser">
+                <select value={category} onChange={(event) => setCategory(event.target.value as Announcement["category"])}>
                   <option>Community</option>
                   <option>Fundraiser</option>
                   <option>Prayer Alert</option>
@@ -68,9 +155,21 @@ export function AnnouncementsPage() {
               </label>
             </div>
             <label>
-              <span>Message Content</span>
-              <textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={7} />
+              <span>Rough Notes (Optional)</span>
+              <textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={4} placeholder="e.g. Please remind everyone not to park in the neighbor's driveway on Friday..." />
             </label>
+
+            <button
+              className="primary-button"
+              type="button"
+              onClick={handleAIGenerate}
+              disabled={isGenerating}
+              style={{ width: "100%", justifyContent: "center", background: "linear-gradient(to right, #0f766e, #0369a1)" }}
+            >
+              {isGenerating ? <Loader2 size={18} className="spin" /> : <Sparkles size={18} />}
+              {isGenerating ? "Generating..." : "Generate with AI"}
+            </button>
+
             <div className="form-grid two">
               <label>
                 <span>Schedule date/time</span>
@@ -86,21 +185,25 @@ export function AnnouncementsPage() {
               </label>
             </div>
             <div className="channel-grid">
-              {["Email", "Push Notification", "SMS", "Website Banner"].map((channel) => (
-                <label key={channel}><input type="checkbox" defaultChecked={channel !== "SMS"} /> {channel}</label>
+              {[
+                { label: "Email", value: "Email" },
+                { label: "Push Notification", value: "Push" },
+                { label: "SMS", value: "SMS" },
+                { label: "Website Banner", value: "Website" },
+              ].map((channel) => (
+                <label key={channel.value}>
+                  <input
+                    type="checkbox"
+                    checked={channels.includes(channel.value as Announcement["channels"][number])}
+                    onChange={() => toggleChannel(channel.value as Announcement["channels"][number])}
+                  />{" "}
+                  {channel.label}
+                </label>
               ))}
             </div>
           </div>
-          <div className="button-row">
-            <button className="secondary-button" type="button">
-              <Sparkles size={18} />
-              Improve with AI
-            </button>
-            <button className="secondary-button" type="button">
-              <Eye size={18} />
-              Preview
-            </button>
-            <button className="secondary-button" type="button" onClick={() => setToast("Announcement saved as draft.")}>
+          <div className="button-row" style={{marginTop: '2rem'}}>
+            <button className="secondary-button" type="button" onClick={() => saveAnnouncement("Draft")}>
               Save Draft
             </button>
             <button className="primary-button" type="button" onClick={() => setShowConfirm(true)}>
@@ -111,19 +214,38 @@ export function AnnouncementsPage() {
         </Card>
 
         <Card>
-          <SectionHeader title="Preview" eyebrow="Before publishing" action={<Eye size={18} />} />
-          <div className="announcement-preview">
-            <Badge tone="gold">Fundraiser</Badge>
-            <h3>{title}</h3>
-            <p>{message}</p>
-            <span>Audience: {audience} | Schedule: {schedule}</span>
-            <span>Channels: Email, Push Notification, Website Banner</span>
-          </div>
-          <div className="checklist">
-            <span>AI tone analysis: Serene and informative</span>
-            <span>Character count within limits</span>
-            <span>Arabic/Urdu translation pending</span>
-          </div>
+          <SectionHeader title="Live Preview" eyebrow="AI Output" action={<Eye size={18} />} />
+
+          {generatedContent ? (
+            <div className="ai-preview-container">
+              <div className="tab-nav" style={{marginBottom: '1rem', flexWrap: 'wrap'}}>
+                {(Object.keys(generatedContent).filter(k => k !== 'title') as Array<keyof AIAnnouncementResult>).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`tab-btn ${previewTab === key ? 'active' : ''}`}
+                    onClick={() => setPreviewTab(key)}
+                    style={{textTransform: 'capitalize', padding: '0.5rem'}}
+                  >
+                    {key}
+                  </button>
+                ))}
+              </div>
+              <div className="announcement-preview" style={{ direction: (previewTab === "arabic" || previewTab === "urdu") ? "rtl" : "ltr" }}>
+                <Badge tone="gold">{category}</Badge>
+                <h3 style={{marginTop: '0.5rem'}}>{generatedContent.title}</h3>
+                <div style={{ whiteSpace: "pre-wrap", color: "#334155", lineHeight: "1.6" }}>
+                  {generatedContent[previewTab]}
+                </div>
+              </div>
+              <div className="checklist" style={{marginTop: '1.5rem'}}>
+                <span><Sparkles size={14} style={{display:'inline', marginRight:'4px', color:'#0f766e'}}/> AI translation completed</span>
+                <span>Channels: {channels.join(", ") || "No channels selected"}</span>
+              </div>
+            </div>
+          ) : (
+             <EmptyState title="No AI output yet" description="Enter a topic and click Generate with AI to preview all formats." />
+          )}
         </Card>
       </div>
 
@@ -157,11 +279,6 @@ export function AnnouncementsPage() {
         )}
       </Card>
 
-      <Card>
-        <SectionHeader title="Loading State" eyebrow="System feedback" />
-        <LoadingSkeleton rows={3} />
-      </Card>
-
       {showConfirm ? (
         <ConfirmDialog
           title="Publish announcement?"
@@ -170,8 +287,7 @@ export function AnnouncementsPage() {
           onCancel={() => setShowConfirm(false)}
           onConfirm={() => {
             setShowConfirm(false);
-            setDraftStatus("Published");
-            setToast("Announcement published successfully.");
+            saveAnnouncement("Published");
           }}
         />
       ) : null}
