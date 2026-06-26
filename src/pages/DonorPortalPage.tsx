@@ -146,6 +146,22 @@ function MyDonationsView() {
             </tbody>
           </table>
         </div>
+        <div className="mobile-list">
+          {donations.slice(0, 4).map((donation) => (
+            <div className="mobile-record" key={donation.id}>
+              <div>
+                <strong>{donation.fund}</strong>
+                <span>{donation.date}</span>
+              </div>
+              <Badge tone={donation.status === "Completed" ? "green" : "gold"}>{donation.status}</Badge>
+              <dl>
+                <div><dt>Amount</dt><dd>{currency(donation.amount)}</dd></div>
+                <div><dt>Method</dt><dd>{donation.method}</dd></div>
+                <div><dt>Receipt</dt><dd>{donation.receiptId}</dd></div>
+              </dl>
+            </div>
+          ))}
+        </div>
       </Card>
     </div>
   );
