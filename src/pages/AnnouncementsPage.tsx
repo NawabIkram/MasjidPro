@@ -1,20 +1,10 @@
 ﻿import { Eye, Megaphone, Send, Sparkles, Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge, Card, ConfirmDialog, EmptyState, LoadingSkeleton, SectionHeader, Toast } from "../components/ui";
 import { announcements } from "../data/mockData";
 import type { Announcement, AnnouncementStatus } from "../types";
-import { generateAIJson } from "../lib/gemini";
 import { useLanguage } from "../i18n/i18n";
-
-interface AIAnnouncementResult {
-  title: string;
-  english: string;
-  urdu: string;
-  arabic: string;
-  sms: string;
-  whatsapp: string;
-  email: string;
-}
+import { createAnnouncement, generateAnnouncementDraft, getAnnouncements, type AIAnnouncementResult } from "../services/api";
 
 export function AnnouncementsPage() {
   const { t } = useLanguage();
@@ -30,11 +20,32 @@ export function AnnouncementsPage() {
 
   const [toast, setToast] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // AI States
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedContent, setGeneratedContent] = useState<AIAnnouncementResult | null>(null);
   const [previewTab, setPreviewTab] = useState<keyof AIAnnouncementResult>("english");
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    getAnnouncements()
+      .then((data) => {
+        if (mounted) {
+          setItems(data);
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   function tone(status: AnnouncementStatus) {
     if (status === "Published") return "green";
@@ -53,17 +64,15 @@ export function AnnouncementsPage() {
     );
   }
 
-  function saveAnnouncement(status: AnnouncementStatus) {
-    const nextAnnouncement: Announcement = {
-      id: `ann-${Date.now()}`,
-      title,
+  async function saveAnnouncement(status: AnnouncementStatus) {
+    const nextAnnouncement = await createAnnouncement({
+      title: title || "Community update",
       category,
       excerpt: generatedContent ? generatedContent.english : message,
       status,
       date: status === "Draft" ? "Draft" : schedule,
       channels,
-      reach: status === "Published" ? 1240 : 0,
-    };
+    });
 
     setItems((current) => [nextAnnouncement, ...current]);
     setDraftStatus(status);
@@ -80,19 +89,7 @@ export function AnnouncementsPage() {
     setToast("AI is crafting the announcement in multiple languages...");
 
     try {
-      const prompt = `Write a comprehensive community announcement for the masjid based on this rough draft:\nTitle: ${title}\nNotes: ${message}\nAudience: ${audience}\nCategory: ${category}`;
-      const schemaDescription = `
-      {
-        "title": "A catchy and respectful English title",
-        "english": "Full English announcement body suitable for an email or newsletter",
-        "urdu": "Full Urdu translation of the announcement body",
-        "arabic": "Full Arabic translation of the announcement body",
-        "sms": "A concise SMS version under 160 characters",
-        "whatsapp": "A WhatsApp version using bolding and emojis",
-        "email": "An HTML/rich-text style email format"
-      }`;
-
-      const result = await generateAIJson<AIAnnouncementResult>(prompt, schemaDescription);
+      const result = await generateAnnouncementDraft({ title, message, audience, category });
       setGeneratedContent(result);
       setTitle(result.title);
       setToast("AI announcement generated successfully!");
@@ -261,7 +258,9 @@ export function AnnouncementsPage() {
             </select>
           }
         />
-        {filtered.length === 0 ? (
+        {loading ? (
+          <LoadingSkeleton rows={4} />
+        ) : filtered.length === 0 ? (
           <EmptyState title="No announcements yet" description="Create or schedule an announcement to see it here." />
         ) : (
           <div className="announcement-list">
