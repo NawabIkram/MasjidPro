@@ -1,13 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Mail, Phone, Repeat2, UserRound } from "lucide-react";
-import { Badge, Card, EmptyState, Modal, SectionHeader, Toast } from "../components/ui";
+import { Badge, Card, EmptyState, LoadingSkeleton, Modal, SectionHeader, Toast } from "../components/ui";
 import { donors } from "../data/mockData";
 import type { Donor, FundType } from "../types";
 import { currency } from "../utils/format";
+import { getDonors } from "../services/api";
 
 export function DonorsPage() {
   const [records, setRecords] = useState<Donor[]>(donors);
   const [activeDonorId, setActiveDonorId] = useState(donors[0].id);
+  const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [toast, setToast] = useState("");
   const [newDonor, setNewDonor] = useState({
@@ -20,6 +22,27 @@ export function DonorsPage() {
     () => records.find((donor) => donor.id === activeDonorId) ?? records[0],
     [activeDonorId, records],
   );
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    getDonors()
+      .then((data) => {
+        if (mounted) {
+          setRecords(data);
+          setActiveDonorId(data[0]?.id ?? donors[0].id);
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   function addDonor() {
     const donor: Donor = {
@@ -56,6 +79,7 @@ export function DonorsPage() {
         <Card>
           <SectionHeader title="Donor Profiles" eyebrow="Community CRM" />
           <div className="donor-list">
+            {loading ? <LoadingSkeleton rows={4} /> : null}
             {records.map((donor) => (
               <button className={donor.id === activeDonor.id ? "donor-row active" : "donor-row"} key={donor.id} type="button" onClick={() => setActiveDonorId(donor.id)}>
                 <div className="avatar small">{donor.name.slice(0, 2).toUpperCase()}</div>
