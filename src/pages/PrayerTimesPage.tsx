@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { BellRing, Clock3, MapPin, Moon, Settings2 } from "lucide-react";
-import { Card, ProgressBar, SectionHeader } from "../components/ui";
+import { Card, ProgressBar, SectionHeader, Toast } from "../components/ui";
 import { prayerTimes } from "../data/mockData";
 
 export function PrayerTimesPage() {
+  const [toast, setToast] = useState("");
   const nextPrayer = prayerTimes.find((prayer) => prayer.isNext) ?? prayerTimes[0];
 
   return (
@@ -12,7 +14,7 @@ export function PrayerTimesPage() {
           <span className="eyebrow">Prayer Times</span>
           <h1>Daily salah schedule with next prayer highlight and congregation alerts.</h1>
         </div>
-        <button className="primary-button" type="button">
+        <button className="primary-button" type="button" onClick={() => setToast("Prayer schedule updated for today.")}>
           <Settings2 size={18} />
           Update Schedule
         </button>
@@ -54,9 +56,9 @@ export function PrayerTimesPage() {
         <Card>
           <SectionHeader title="Notification Settings" eyebrow="Community alerts" />
           <div className="toggle-list">
-            <label><input type="checkbox" defaultChecked /> Notify before prayer</label>
-            <label><input type="checkbox" defaultChecked /> Notify before Jumuah</label>
-            <label><input type="checkbox" /> Notify before Iftar</label>
+            <label><input type="checkbox" defaultChecked onChange={() => setToast("Prayer notification setting updated.")} /> Notify before prayer</label>
+            <label><input type="checkbox" defaultChecked onChange={() => setToast("Jumuah notification setting updated.")} /> Notify before Jumuah</label>
+            <label><input type="checkbox" onChange={() => setToast("Iftar notification setting updated.")} /> Notify before Iftar</label>
           </div>
         </Card>
         <Card>
@@ -67,6 +69,7 @@ export function PrayerTimesPage() {
           </div>
         </Card>
       </div>
+      {toast ? <Toast message={toast} onClose={() => setToast("")} /> : null}
     </div>
   );
 }
