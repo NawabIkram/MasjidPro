@@ -1,4 +1,4 @@
-export type Masjid = {
+﻿export type Masjid = {
   id: string;
   name: string;
   location: string;
@@ -6,6 +6,7 @@ export type Masjid = {
 };
 
 export type UserRole = "admin" | "donor";
+export type Language = "en" | "ar";
 
 export type DonationStatus = "Completed" | "Pending" | "Refunded";
 export type FundType = "Zakat" | "Sadaqah" | "General" | "Building";
@@ -100,4 +101,85 @@ export type DemoScenario = {
   audience: string;
   outcome: string;
   steps: string[];
+};
+
+export type StaffDepartment =
+  | "Imam & Religious"
+  | "Administration"
+  | "Finance"
+  | "Volunteers"
+  | "Security"
+  | "Maintenance";
+
+export type StaffStatus = "Active" | "On Leave" | "Inactive";
+export type AttendanceStatus = "Present" | "Late" | "Absent" | "Day Off";
+
+export type StaffMember = {
+  id: string;
+  name: string;
+  role: string;
+  department: StaffDepartment;
+  email: string;
+  phone: string;
+  joinDate: string;
+  status: StaffStatus;
+  salary: number;
+  avatarInitials: string;
+};
+
+export type AttendanceRecord = {
+  id: string;
+  staffId: string;
+  staffName: string;
+  date: string;
+  checkIn: string;
+  checkOut: string;
+  status: AttendanceStatus;
+};
+
+export type EventCategory =
+  | "Religious"
+  | "Educational"
+  | "Social"
+  | "Fundraiser"
+  | "Youth"
+  | "Administrative";
+
+export type EventStatus = "Upcoming" | "Ongoing" | "Completed" | "Cancelled";
+export type BookingStatus = "Pending" | "Confirmed" | "Rejected";
+
+export type MasjidEvent = {
+  id: string;
+  title: string;
+  description: string;
+  category: EventCategory;
+  date: string;
+  startTime: string;
+  endTime: string;
+  venue: string;
+  capacity: number;
+  rsvpCount: number;
+  organizer: string;
+  status: EventStatus;
+  isRecurring: boolean;
+};
+
+export type Venue = {
+  id: string;
+  name: string;
+  capacity: number;
+  amenities: string[];
+  available: boolean;
+};
+
+export type RoomBooking = {
+  id: string;
+  requesterName: string;
+  requesterEmail: string;
+  venue: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  purpose: string;
+  status: BookingStatus;
 };
