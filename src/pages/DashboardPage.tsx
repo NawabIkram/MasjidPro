@@ -1,17 +1,12 @@
 ﻿import {
   BarChart3,
-  BellRing,
   Calculator,
   Download,
   Megaphone,
   Plus,
-  Send,
   ShieldCheck,
   Sparkles,
   WalletCards,
-  Users,
-  CalendarDays,
-  Clock,
   Loader2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -22,9 +17,6 @@ import {
   campaign,
   fundBreakdown,
   prayerTimes,
-  attendanceRecords,
-  masjidEvents,
-  staffMembers,
 } from "../data/mockData";
 import { downloadTextFile } from "../utils/downloads";
 import { currency, percent } from "../utils/format";
@@ -60,9 +52,6 @@ export function DashboardPage() {
   };
   const nextPrayer = dashboardPrayerTimes.find((prayer) => prayer.isNext) ?? dashboardPrayerTimes[0];
   const campaignPercent = Math.round((dashboardCampaign.raised / dashboardCampaign.goal) * 100);
-
-  const presentStaff = attendanceRecords.filter((r) => r.status === "Present" || r.status === "Late");
-  const upcomingEvents = masjidEvents.filter((e) => e.status === "Upcoming").slice(0, 3);
 
   // AI Insight State
   const [insight, setInsight] = useState<{headline: string, recommendation: string} | null>(null);
@@ -172,7 +161,7 @@ export function DashboardPage() {
             <Badge tone="gold">{campaignPercent}% complete</Badge>
             <span>{dashboardCampaign.dueDate}</span>
           </div>
-          <button className="secondary-button" type="button" onClick={() => navigate("/donate")}>{t("dash_viewCampaign")}</button>
+          <button className="secondary-button" type="button" onClick={() => navigate("/donations")}>{t("dash_viewCampaign")}</button>
         </Card>
       </div>
 
@@ -229,44 +218,6 @@ export function DashboardPage() {
                </button>
             </div>
           )}
-        </Card>
-      </div>
-
-      <div className="dashboard-grid">
-        <Card>
-          <SectionHeader title={t("dash_staffOnDuty")} eyebrow={t("dash_todayAttendance")} action={<button className="text-button" type="button" onClick={() => navigate("/staff")}>{t("viewAll")}</button>} />
-          <div className="activity-list">
-            {presentStaff.map((record) => {
-              const staff = staffMembers.find(s => s.id === record.staffId);
-              return (
-                <div className="activity-item" key={record.id}>
-                  <span><Clock size={14} style={{display:'inline', marginRight:'4px'}}/>{record.checkIn}</span>
-                  <div>
-                    <strong>{record.staffName}</strong>
-                    <p>{staff?.role}</p>
-                  </div>
-                  <Badge tone={record.status === "Present" ? "green" : "gold"}>{record.status}</Badge>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-
-        <Card>
-          <SectionHeader title={t("dash_upcomingEvents")} eyebrow={t("dash_nextEvents")} action={<button className="text-button" type="button" onClick={() => navigate("/events")}>{t("viewAll")}</button>} />
-          <div className="announcement-list">
-            {upcomingEvents.map((event) => (
-              <div className="announcement-item" key={event.id}>
-                <div>
-                  <strong>{event.title}</strong>
-                  <p>{event.date} • {event.startTime}</p>
-                </div>
-                <Badge tone="blue">
-                  {event.rsvpCount} RSVPs
-                </Badge>
-              </div>
-            ))}
-          </div>
         </Card>
       </div>
 
