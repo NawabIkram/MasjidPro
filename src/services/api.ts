@@ -13,6 +13,7 @@ import {
 } from "../data/mockData";
 import type {
   Announcement,
+  AuthUser,
   AuditLogEntry,
   Campaign,
   Donation,
@@ -23,12 +24,51 @@ import type {
   Masjid,
   PrayerTime,
   ReportMetric,
+  RecurringDonation,
+  WorkspaceSettings,
 } from "../types";
 
 type ApiEnvelope<T> = {
   data: T;
   error?: string;
 };
+
+export type AuthSession = {
+  user: AuthUser;
+  masjids: Masjid[];
+};
+
+export type MasjidRegistrationInput = {
+  masjidName: string;
+  country: string;
+  city: string;
+  address: string;
+  timezone: string;
+  calculationMethod: string;
+  asrMethod: string;
+  adminName: string;
+  adminEmail: string;
+  password: string;
+  phone?: string;
+};
+
+export type DonorRegistrationInput = {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+  masjidId: string;
+};
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
 
 export type DashboardApiData = {
   activeMasjid: Masjid;
@@ -154,13 +194,14 @@ const fallbackReports: ReportsApiData = {
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
     ...init,
   });
   const payload = (await response.json()) as ApiEnvelope<T>;
 
   if (!response.ok) {
-    throw new Error(payload.error || "MasjidPro API request failed.");
+    throw new ApiError(payload.error || "MasjidPro API request failed.", response.status);
   }
 
   return payload.data;
@@ -170,9 +211,34 @@ async function readWithFallback<T>(path: string, fallback: T): Promise<T> {
   try {
     return await apiRequest<T>(path);
   } catch (error) {
+    if (error instanceof ApiError && [401, 403].includes(error.status)) throw error;
     console.warn(`Using local fallback for ${path}`, error);
     return fallback;
   }
+}
+
+export function getCurrentSession() {
+  return apiRequest<AuthSession>("/auth/me");
+}
+
+export function loginAccount(input: { email: string; password: string }) {
+  return apiRequest<AuthSession>("/auth/login", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function registerMasjidAccount(input: MasjidRegistrationInput) {
+  return apiRequest<AuthSession>("/auth/register-masjid", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function registerDonorAccount(input: DonorRegistrationInput) {
+  return apiRequest<AuthSession>("/auth/register-donor", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function logoutAccount() {
+  return apiRequest<{ ok: boolean }>("/auth/logout", { method: "POST", body: "{}" });
+}
+
+export function updateProfile(input: Partial<Pick<AuthUser, "name" | "phone" | "preferredMasjidId">>) {
+  return apiRequest<AuthUser>("/profile", { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export function getMasjids() {
@@ -294,6 +360,26 @@ export function getDonors() {
 
 export function getAuditLog() {
   return readWithFallback<AuditLogEntry[]>("/audit-log", mockAuditLog);
+}
+
+export function getRecurringDonations() {
+  return apiRequest<RecurringDonation[]>("/recurring-donations");
+}
+
+export function createRecurringDonation(input: Pick<RecurringDonation, "amount" | "fund" | "frequency">) {
+  return apiRequest<RecurringDonation>("/recurring-donations", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function updateRecurringDonation(id: string, status: RecurringDonation["status"]) {
+  return apiRequest<RecurringDonation>(`/recurring-donations/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ status }) });
+}
+
+export function getWorkspaceSettings() {
+  return apiRequest<WorkspaceSettings>("/settings");
+}
+
+export function updateWorkspaceSettings(input: Partial<WorkspaceSettings>) {
+  return apiRequest<WorkspaceSettings>("/settings", { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export async function generateReportSummary() {
