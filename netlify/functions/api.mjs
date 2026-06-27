@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { connectLambda } from "@netlify/blobs";
 import {
   createSession,
   createUser,
@@ -294,6 +295,7 @@ async function handleAuth(event, id) {
 }
 
 export async function handler(event) {
+  if (event.blobs) connectLambda(event);
   if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
 
   const path = (event.path || "")
