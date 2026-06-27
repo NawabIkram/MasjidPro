@@ -14,9 +14,10 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { GoogleSignInButton } from "../components/GoogleSignInButton";
 import { Toast } from "../components/ui";
 import { getMasjids } from "../services/api";
-import type { DonorRegistrationInput, MasjidRegistrationInput } from "../services/api";
+import type { DonorRegistrationInput, GoogleAuthInput, MasjidRegistrationInput } from "../services/api";
 import type { Masjid } from "../types";
 
 type AuthTab = "signin" | "masjid" | "donor";
@@ -43,7 +44,7 @@ const initialDonor: DonorRegistrationInput = {
 };
 
 export function LoginPage() {
-  const { user, login, registerMasjid, registerDonor } = useAuth();
+  const { user, login, continueWithGoogle, registerMasjid, registerDonor } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<AuthTab>("signin");
   const [toast, setToast] = useState("");
@@ -76,6 +77,38 @@ export function LoginPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const runGoogleAuth = (credential: string, mode: AuthTab) => {
+    let input: GoogleAuthInput;
+    if (mode === "donor") {
+      if (!donorForm.masjidId) {
+        setError("Please select a masjid before continuing with Google.");
+        return;
+      }
+      input = { credential, mode: "donor", masjidId: donorForm.masjidId, phone: donorForm.phone };
+    } else if (mode === "masjid") {
+      const required = [masjidForm.masjidName, masjidForm.country, masjidForm.city, masjidForm.address, masjidForm.timezone];
+      if (required.some((value) => !value.trim())) {
+        setError("Complete the masjid details before continuing with Google.");
+        return;
+      }
+      input = {
+        credential,
+        mode: "masjid",
+        masjidName: masjidForm.masjidName,
+        country: masjidForm.country,
+        city: masjidForm.city,
+        address: masjidForm.address,
+        timezone: masjidForm.timezone,
+        calculationMethod: masjidForm.calculationMethod,
+        asrMethod: masjidForm.asrMethod,
+        phone: masjidForm.phone,
+      };
+    } else {
+      input = { credential, mode: "sign-in" };
+    }
+    void runAuth(() => continueWithGoogle(input));
   };
 
   return (
@@ -120,7 +153,8 @@ export function LoginPage() {
               <button type="button" onClick={() => setToast("Password reset email service will be available after email provider setup.")}>Forgot password?</button>
             </div>
             <button className="primary-button full" disabled={submitting} type="submit">{submitting ? "Signing in..." : "Sign In"}<ArrowRight size={18} /></button>
-            <button className="secondary-button full" disabled type="button" title="Google provider setup required">Continue with Google</button>
+            <AuthDivider />
+            <GoogleSignInButton disabled={submitting} onCredential={(credential) => runGoogleAuth(credential, "signin")} />
             <div className="auth-ctas">
               <button type="button" onClick={() => setActiveTab("masjid")}>New Masjid? Register your Masjid</button>
               <button type="button" onClick={() => setActiveTab("donor")}>Donor? Create donor account</button>
@@ -134,6 +168,7 @@ export function LoginPage() {
             submitting={submitting}
             onChange={setMasjidForm}
             onSubmit={(event) => { event.preventDefault(); void runAuth(() => registerMasjid(masjidForm)); }}
+            onGoogle={(credential) => runGoogleAuth(credential, "masjid")}
           />
         ) : null}
 
@@ -144,6 +179,7 @@ export function LoginPage() {
             submitting={submitting}
             onChange={setDonorForm}
             onSubmit={(event) => { event.preventDefault(); void runAuth(() => registerDonor(donorForm)); }}
+            onGoogle={(credential) => runGoogleAuth(credential, "donor")}
           />
         ) : null}
       </section>
@@ -157,11 +193,13 @@ function MasjidRegistrationForm({
   submitting,
   onChange,
   onSubmit,
+  onGoogle,
 }: {
   value: MasjidRegistrationInput;
   submitting: boolean;
   onChange: (value: MasjidRegistrationInput) => void;
   onSubmit: (event: FormEvent) => void;
+  onGoogle: (credential: string) => void;
 }) {
   const field = (name: keyof MasjidRegistrationInput) => ({
     value: value[name] ?? "",
@@ -183,6 +221,12 @@ function MasjidRegistrationForm({
         <AuthField icon={Lock} label="Password" placeholder="Minimum 8 characters" type="password" minLength={8} {...field("password")} />
       </div>
       <button className="primary-button full" disabled={submitting} type="submit">{submitting ? "Creating workspace..." : "Create Masjid Workspace"}<ArrowRight size={18} /></button>
+      <AuthDivider />
+      <GoogleSignInButton
+        disabled={submitting || [value.masjidName, value.country, value.city, value.address, value.timezone].some((item) => !item.trim())}
+        onCredential={onGoogle}
+        text="signup_with"
+      />
     </form>
   );
 }
@@ -193,12 +237,14 @@ function DonorRegistrationForm({
   submitting,
   onChange,
   onSubmit,
+  onGoogle,
 }: {
   value: DonorRegistrationInput;
   masjids: Masjid[];
   submitting: boolean;
   onChange: (value: DonorRegistrationInput) => void;
   onSubmit: (event: FormEvent) => void;
+  onGoogle: (credential: string) => void;
 }) {
   return (
     <form className="registration-form" onSubmit={onSubmit}>
@@ -210,8 +256,14 @@ function DonorRegistrationForm({
         <label className="wide"><span>Select masjid</span><select required value={value.masjidId} onChange={(event) => onChange({ ...value, masjidId: event.target.value })}>{masjids.map((masjid) => <option key={masjid.id} value={masjid.id}>{masjid.name} - {masjid.location}</option>)}</select></label>
       </div>
       <button className="primary-button full" disabled={submitting || !value.masjidId} type="submit">{submitting ? "Creating account..." : "Create Donor Account"}<ArrowRight size={18} /></button>
+      <AuthDivider />
+      <GoogleSignInButton disabled={submitting || !value.masjidId} onCredential={onGoogle} text="signup_with" />
     </form>
   );
+}
+
+function AuthDivider() {
+  return <div className="auth-divider" aria-hidden="true"><span>or</span></div>;
 }
 
 function AuthField({ icon: Icon, label, minLength, ...input }: {
