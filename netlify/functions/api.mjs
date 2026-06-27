@@ -6,7 +6,9 @@ import {
   destroySession,
   expiredSessionCookie,
   findUserByEmail,
+  findUserByGoogleSubject,
   getSessionUser,
+  linkGoogleIdentity,
   normalizeEmail,
   publicUser,
   requireMasjidAccess,
@@ -14,6 +16,7 @@ import {
   sessionCookie,
   verifyPassword,
 } from "./lib/auth.mjs";
+import { getGoogleAuthConfig, verifyGoogleCredential } from "./lib/google-auth.mjs";
 import { defaultPrayerTimes, defaultSettings, ensureSeedData } from "./lib/seed.mjs";
 import { deleteJSON, getJSON, listJSON, setJSON, storageMode } from "./lib/storage.mjs";
 import { configuredAIProviders, enforceAIRateLimit, generateAI } from "./lib/ai.mjs";
@@ -188,69 +191,121 @@ const reportPayload = (donations) => {
   };
 };
 
+const authResponse = async (event, user, masjids, statusCode = 200) => {
+  const session = await createSession(user.id);
+  return json(
+    statusCode,
+    { data: { user: publicUser(user), masjids } },
+    { "Set-Cookie": sessionCookie(session.token, event) },
+  );
+};
+
+const createMasjidAccount = async (body, identity) => {
+  requireFields(body, ["masjidName", "country", "city", "address", "timezone"]);
+  if (!identity.name || !identity.email) {
+    throw Object.assign(new Error("Admin name and email are required."), { statusCode: 422 });
+  }
+  if (await findUserByEmail(identity.email)) {
+    throw Object.assign(new Error("An account already exists for this email."), { statusCode: 409 });
+  }
+
+  const masjidId = `masjid-${randomUUID()}`;
+  const createdAt = now();
+  const calculationMethod = cleanString(body.calculationMethod) || "ISNA";
+  const asrMethod = cleanString(body.asrMethod) || "Hanafi";
+  const masjid = {
+    id: masjidId,
+    name: cleanString(body.masjidName),
+    country: cleanString(body.country),
+    city: cleanString(body.city),
+    address: cleanString(body.address),
+    location: `${cleanString(body.city)}, ${cleanString(body.country)}`,
+    timezone: cleanString(body.timezone),
+    calculationMethod,
+    asrMethod,
+    method: `${calculationMethod}, ${asrMethod} Asr`,
+    createdAt,
+  };
+  await setJSON(`masjids/${masjid.id}`, masjid, { onlyIfNew: true });
+  await setJSON(`settings/${masjid.id}`, defaultSettings(masjid), { onlyIfNew: true });
+
+  try {
+    const user = await createUser({
+      ...identity,
+      phone: body.phone,
+      role: "admin",
+      masjidIds: [masjid.id],
+      preferredMasjidId: masjid.id,
+    });
+    await addAudit(masjid.id, "Masjid workspace created", user);
+    return { user, masjids: [masjid] };
+  } catch (error) {
+    await Promise.all([deleteJSON(`masjids/${masjid.id}`), deleteJSON(`settings/${masjid.id}`)]);
+    throw error;
+  }
+};
+
+const createDonorAccount = async (body, identity) => {
+  if (!identity.name || !identity.email) {
+    throw Object.assign(new Error("Donor name and email are required."), { statusCode: 422 });
+  }
+  const masjid = await getJSON(`masjids/${cleanString(body.masjidId)}`);
+  if (!masjid) throw Object.assign(new Error("Please select a valid masjid."), { statusCode: 422 });
+  const user = await createUser({
+    ...identity,
+    phone: body.phone,
+    role: "donor",
+    masjidIds: [masjid.id],
+    preferredMasjidId: masjid.id,
+  });
+  return { user, masjids: [masjid] };
+};
+
 async function handleAuth(event, id) {
+  if (id === "google-config" && event.httpMethod === "GET") {
+    return json(200, { data: getGoogleAuthConfig() });
+  }
+
+  if (id === "google" && event.httpMethod === "POST") {
+    const body = parseBody(event);
+    const identity = await verifyGoogleCredential(body.credential);
+    const existing = (await findUserByGoogleSubject(identity.subject)) ?? (await findUserByEmail(identity.email));
+    if (existing) {
+      const user = await linkGoogleIdentity(existing, identity.subject);
+      return authResponse(event, user, await getMasjidsByIds(user.masjidIds));
+    }
+
+    if (body.mode === "donor") {
+      const account = await createDonorAccount(body, { ...identity, googleSubject: identity.subject });
+      return authResponse(event, account.user, account.masjids, 201);
+    }
+    if (body.mode === "masjid") {
+      const account = await createMasjidAccount(body, { ...identity, googleSubject: identity.subject });
+      return authResponse(event, account.user, account.masjids, 201);
+    }
+    throw Object.assign(new Error("No MasjidPro account exists for this Google email. Register a masjid or donor account first."), { statusCode: 404 });
+  }
+
   if (id === "register-masjid" && event.httpMethod === "POST") {
     const body = parseBody(event);
     requireFields(body, ["masjidName", "country", "city", "address", "timezone", "adminName", "adminEmail", "password"]);
-    if (await findUserByEmail(body.adminEmail)) {
-      throw Object.assign(new Error("An account already exists for this email."), { statusCode: 409 });
-    }
-
-    const masjidId = `masjid-${randomUUID()}`;
-    const createdAt = now();
-    const calculationMethod = cleanString(body.calculationMethod) || "ISNA";
-    const asrMethod = cleanString(body.asrMethod) || "Hanafi";
-    const masjid = {
-      id: masjidId,
-      name: cleanString(body.masjidName),
-      country: cleanString(body.country),
-      city: cleanString(body.city),
-      address: cleanString(body.address),
-      location: `${cleanString(body.city)}, ${cleanString(body.country)}`,
-      timezone: cleanString(body.timezone),
-      calculationMethod,
-      asrMethod,
-      method: `${calculationMethod}, ${asrMethod} Asr`,
-      createdAt,
-    };
-    await setJSON(`masjids/${masjid.id}`, masjid, { onlyIfNew: true });
-    await setJSON(`settings/${masjid.id}`, defaultSettings(masjid), { onlyIfNew: true });
-
-    try {
-      const user = await createUser({
-        name: body.adminName,
-        email: body.adminEmail,
-        phone: body.phone,
-        password: body.password,
-        role: "admin",
-        masjidIds: [masjid.id],
-        preferredMasjidId: masjid.id,
-      });
-      const session = await createSession(user.id);
-      await addAudit(masjid.id, "Masjid workspace created", user);
-      return json(201, { data: { user: publicUser(user), masjids: [masjid] } }, { "Set-Cookie": sessionCookie(session.token, event) });
-    } catch (error) {
-      await Promise.all([deleteJSON(`masjids/${masjid.id}`), deleteJSON(`settings/${masjid.id}`)]);
-      throw error;
-    }
+    const account = await createMasjidAccount(body, {
+      name: body.adminName,
+      email: body.adminEmail,
+      password: body.password,
+    });
+    return authResponse(event, account.user, account.masjids, 201);
   }
 
   if (id === "register-donor" && event.httpMethod === "POST") {
     const body = parseBody(event);
     requireFields(body, ["name", "email", "phone", "password", "masjidId"]);
-    const masjid = await getJSON(`masjids/${cleanString(body.masjidId)}`);
-    if (!masjid) throw Object.assign(new Error("Please select a valid masjid."), { statusCode: 422 });
-    const user = await createUser({
+    const account = await createDonorAccount(body, {
       name: body.name,
       email: body.email,
-      phone: body.phone,
       password: body.password,
-      role: "donor",
-      masjidIds: [masjid.id],
-      preferredMasjidId: masjid.id,
     });
-    const session = await createSession(user.id);
-    return json(201, { data: { user: publicUser(user), masjids: [masjid] } }, { "Set-Cookie": sessionCookie(session.token, event) });
+    return authResponse(event, account.user, account.masjids, 201);
   }
 
   if (id === "login" && event.httpMethod === "POST") {
@@ -260,9 +315,8 @@ async function handleAuth(event, id) {
     if (!user || !(await verifyPassword(body.password, user.passwordHash))) {
       throw Object.assign(new Error("Email or password is incorrect."), { statusCode: 401 });
     }
-    const session = await createSession(user.id);
     const masjids = await getMasjidsByIds(user.masjidIds);
-    return json(200, { data: { user: publicUser(user), masjids } }, { "Set-Cookie": sessionCookie(session.token, event) });
+    return authResponse(event, user, masjids);
   }
 
   if (id === "logout" && event.httpMethod === "POST") {
