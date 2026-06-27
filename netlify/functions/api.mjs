@@ -16,6 +16,7 @@ import {
 } from "./lib/auth.mjs";
 import { defaultPrayerTimes, defaultSettings, ensureSeedData } from "./lib/seed.mjs";
 import { deleteJSON, getJSON, listJSON, setJSON, storageMode } from "./lib/storage.mjs";
+import { configuredAIProviders, enforceAIRateLimit, generateAI } from "./lib/ai.mjs";
 
 const json = (statusCode, payload, headers = {}) => ({
   statusCode,
@@ -185,23 +186,6 @@ const reportPayload = (donations) => {
     fundBreakdown: buildFundBreakdown(donations),
     topDonors: donors.slice(0, 5),
   };
-};
-
-const aiResponse = (prompt, donations) => {
-  const lower = cleanString(prompt, 1000).toLowerCase();
-  const total = donations
-    .filter((donation) => donation.status === "Completed")
-    .reduce((sum, donation) => sum + Number(donation.amount), 0);
-  if (lower.includes("announcement") || lower.includes("jumuah")) {
-    return "Assalamu alaikum. Please join us for Jumuah and follow volunteer guidance for parking. May Allah reward your cooperation.";
-  }
-  if (lower.includes("drop") || lower.includes("decrease")) {
-    return "General Fund activity is trailing Zakat. Share a transparent campaign update and include one clear recurring-gift action.";
-  }
-  if (lower.includes("month") || lower.includes("donation")) {
-    return `This workspace has ${donations.length} tracked donations with ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(total)} completed giving.`;
-  }
-  return "I can draft fundraising messages, summarize donations, create announcements, and explain giving trends for this masjid workspace.";
 };
 
 async function handleAuth(event, id) {
@@ -428,7 +412,15 @@ export async function handler(event) {
       const body = parseBody(event);
       const topic = cleanString(body.title) || "Community update";
       const message = cleanString(body.message, 2000) || topic;
-      return json(200, { data: { title: topic, english: `Assalamu alaikum. Please note this important update: ${message}. We appreciate your support and cooperation.`, urdu: "Urdu translation will be generated when the AI provider is configured.", arabic: "Arabic translation will be generated when the AI provider is configured.", sms: `${topic}: Please check the masjid update and share with family.`, whatsapp: `*${topic}*\nPlease check this masjid update and share with the community.`, email: `<h2>${topic}</h2><p>${message}</p>` } });
+      enforceAIRateLimit(user.id);
+      const result = await generateAI({
+        system: "You write warm, trustworthy masjid announcements. Be concise, respectful, community-focused, and factually limited to the details supplied. Start with Assalamu alaikum. Do not invent dates, names, or promises.",
+        prompt: `Write a polished announcement. Title: ${topic}. Category: ${cleanString(body.category)}. Audience: ${cleanString(body.audience)}. Details: ${message}`,
+        maxTokens: 450,
+        temperature: 0.45,
+      });
+      const sms = cleanString(`${topic}: ${result.text}`, 155);
+      return json(200, { data: { title: topic, english: result.text, urdu: result.text, arabic: result.text, sms, whatsapp: `*${topic}*\n${result.text}`, email: result.text, provider: result.provider } });
     }
 
     if (resource === "announcements" && !id && event.httpMethod === "POST") {
@@ -454,7 +446,15 @@ export async function handler(event) {
       const { masjidId } = await getWorkspace(user, parseBody(event).masjidId);
       const donations = await listWorkspaceDonations(masjidId, user);
       const total = donations.filter((item) => item.status === "Completed").reduce((sum, item) => sum + Number(item.amount), 0);
-      return json(200, { data: { title: "Board Giving Summary", summary: `${donations.length} gifts are tracked with ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(total)} completed giving.`, insights: ["Fund activity is calculated from persistent workspace records.", "Receipts are linked to every completed donation.", "Pending donations should be reviewed before reporting."], recommendations: ["Send a Friday recurring Sadaqah reminder.", "Publish a campaign progress update.", "Review pending records weekly."] } });
+      enforceAIRateLimit(user.id);
+      const funds = buildFundBreakdown(donations).map((fund) => `${fund.fund}: ${fund.amount}`).join(", ");
+      const result = await generateAI({
+        system: "You are a careful nonprofit finance analyst for a masjid. Write one concise board-ready paragraph using only supplied aggregate figures. Do not provide tax, legal, or investment advice.",
+        prompt: `Summarize this giving report: tracked gifts ${donations.length}; completed total USD ${total}; funds ${funds}. Mention one practical next action.`,
+        maxTokens: 350,
+        temperature: 0.25,
+      });
+      return json(200, { data: { title: "Board Giving Summary", summary: result.text, insights: ["Fund activity is calculated from persistent workspace records.", "Receipts are linked to completed donations.", "Pending donations should be reviewed before reporting."], recommendations: ["Send a Friday recurring Sadaqah reminder.", "Publish a campaign progress update.", "Review pending records weekly."], provider: result.provider } });
     }
 
     if (resource === "donors" && event.httpMethod === "GET") {
@@ -533,10 +533,25 @@ export async function handler(event) {
       return json(200, { data: (await listJSON(`audit/${masjidId}/`)).sort(byNewest) });
     }
 
+    if (resource === "ai" && event.httpMethod === "GET") {
+      return json(200, { data: { configured: configuredAIProviders(), ready: configuredAIProviders().length > 0 } });
+    }
+
     if (resource === "ai" && event.httpMethod === "POST") {
       const body = parseBody(event);
-      const { masjidId } = await getWorkspace(user, body.masjidId);
-      return json(200, { data: { text: aiResponse(body.prompt, await listWorkspaceDonations(masjidId, user)) } });
+      const { masjidId, masjid } = await getWorkspace(user, body.masjidId);
+      const donations = await listWorkspaceDonations(masjidId, user);
+      const completed = donations.filter((donation) => donation.status === "Completed");
+      const total = completed.reduce((sum, donation) => sum + Number(donation.amount), 0);
+      const fundSummary = buildFundBreakdown(donations).map((fund) => `${fund.fund} USD ${fund.amount}`).join(", ");
+      enforceAIRateLimit(user.id);
+      const result = await generateAI({
+        system: `You are MasjidPro AI for ${masjid.name}. Help masjid administrators and donors with concise, respectful operational guidance. You may use these aggregate workspace facts: ${donations.length} tracked gifts, USD ${total} completed giving, fund totals: ${fundSummary}. Never reveal donor identities, invent records, or claim to process payments. Do not present religious, legal, tax, or financial guidance as authoritative; recommend a qualified person when appropriate.`,
+        prompt: body.prompt,
+        maxTokens: 700,
+        temperature: 0.35,
+      });
+      return json(200, { data: result });
     }
 
     return json(404, { error: "API route not found." });
