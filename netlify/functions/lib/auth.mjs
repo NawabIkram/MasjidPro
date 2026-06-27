@@ -36,7 +36,7 @@ export async function verifyPassword(password, encodedHash) {
 
 export function publicUser(user) {
   if (!user) return null;
-  const { passwordHash: _passwordHash, ...safeUser } = user;
+  const { passwordHash: _passwordHash, googleSubject: _googleSubject, ...safeUser } = user;
   return safeUser;
 }
 
@@ -44,6 +44,13 @@ export async function findUserByEmail(email) {
   const normalized = normalizeEmail(email);
   if (!normalized) return null;
   const lookup = await getJSON(`user-emails/${hashLookup(normalized)}`);
+  return lookup?.userId ? getJSON(`users/${lookup.userId}`) : null;
+}
+
+export async function findUserByGoogleSubject(googleSubject) {
+  const subject = String(googleSubject ?? "").trim();
+  if (!subject) return null;
+  const lookup = await getJSON(`google-subjects/${hashLookup(subject)}`);
   return lookup?.userId ? getJSON(`users/${lookup.userId}`) : null;
 }
 
@@ -60,7 +67,23 @@ export async function createUser(input) {
     throw Object.assign(new Error("An account already exists for this email."), { statusCode: 409 });
   }
 
+  const googleSubject = String(input.googleSubject ?? "").trim();
+  const googleKey = googleSubject ? `google-subjects/${hashLookup(googleSubject)}` : null;
+  let googleReserved = false;
   try {
+    if (!input.password && !googleSubject) {
+      throw Object.assign(new Error("A password or verified Google identity is required."), { statusCode: 422 });
+    }
+    if (googleKey) {
+      const googleReservation = await setJSON(googleKey, { userId }, { onlyIfNew: true });
+      if (!googleReservation.modified) {
+        throw Object.assign(new Error("This Google account is already linked to another MasjidPro account."), { statusCode: 409 });
+      }
+      googleReserved = true;
+    }
+
+    const passwordHash = input.password ? await hashPassword(input.password) : null;
+    const authProviders = [passwordHash ? "password" : null, googleSubject ? "google" : null].filter(Boolean);
     const user = {
       id: userId,
       email,
@@ -69,15 +92,47 @@ export async function createUser(input) {
       role: input.role,
       masjidIds: input.masjidIds,
       preferredMasjidId: input.preferredMasjidId ?? input.masjidIds[0],
-      passwordHash: await hashPassword(input.password),
+      ...(passwordHash ? { passwordHash } : {}),
+      ...(googleSubject ? { googleSubject } : {}),
+      authProviders,
       createdAt: new Date().toISOString(),
     };
     await setJSON(`users/${user.id}`, user, { onlyIfNew: true });
     return user;
   } catch (error) {
     await deleteJSON(emailKey);
+    if (googleReserved && googleKey) await deleteJSON(googleKey);
     throw error;
   }
+}
+
+export async function linkGoogleIdentity(user, googleSubject) {
+  const subject = String(googleSubject ?? "").trim();
+  if (!subject) {
+    throw Object.assign(new Error("Google identity is invalid."), { statusCode: 401 });
+  }
+  if (user.googleSubject && user.googleSubject !== subject) {
+    throw Object.assign(new Error("This email is linked to a different Google account."), { statusCode: 409 });
+  }
+
+  const subjectKey = `google-subjects/${hashLookup(subject)}`;
+  const subjectOwner = await getJSON(subjectKey);
+  if (subjectOwner?.userId && subjectOwner.userId !== user.id) {
+    throw Object.assign(new Error("This Google account is already linked to another MasjidPro account."), { statusCode: 409 });
+  }
+  if (!subjectOwner) {
+    await setJSON(subjectKey, { userId: user.id }, { onlyIfNew: true });
+    const assignedOwner = await getJSON(subjectKey);
+    if (assignedOwner?.userId !== user.id) {
+      throw Object.assign(new Error("This Google account is already linked to another MasjidPro account."), { statusCode: 409 });
+    }
+  }
+
+  const providers = new Set(user.authProviders ?? (user.passwordHash ? ["password"] : []));
+  providers.add("google");
+  const updated = { ...user, googleSubject: subject, authProviders: [...providers], updatedAt: new Date().toISOString() };
+  await setJSON(`users/${user.id}`, updated);
+  return updated;
 }
 
 export async function createSession(userId) {
