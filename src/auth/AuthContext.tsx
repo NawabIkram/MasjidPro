@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { AuthUser, Masjid } from "../types";
 import {
+  continueWithGoogleAccount,
   getCurrentSession,
   loginAccount,
   logoutAccount,
@@ -9,13 +10,14 @@ import {
   registerMasjidAccount,
   updateProfile,
 } from "../services/api";
-import type { DonorRegistrationInput, MasjidRegistrationInput } from "../services/api";
+import type { DonorRegistrationInput, GoogleAuthInput, MasjidRegistrationInput } from "../services/api";
 
 type AuthContextValue = {
   user: AuthUser | null;
   masjids: Masjid[];
   loading: boolean;
   login: (email: string, password: string) => Promise<AuthUser>;
+  continueWithGoogle: (input: GoogleAuthInput) => Promise<AuthUser>;
   registerMasjid: (input: MasjidRegistrationInput) => Promise<AuthUser>;
   registerDonor: (input: DonorRegistrationInput) => Promise<AuthUser>;
   logout: () => Promise<void>;
@@ -63,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       masjids,
       loading,
       login: async (email, password) => acceptSession(await loginAccount({ email, password })),
+      continueWithGoogle: async (input) => acceptSession(await continueWithGoogleAccount(input)),
       registerMasjid: async (input) => acceptSession(await registerMasjidAccount(input)),
       registerDonor: async (input) => acceptSession(await registerDonorAccount(input)),
       logout: async () => {
