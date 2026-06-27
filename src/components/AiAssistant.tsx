@@ -1,7 +1,7 @@
 ﻿import { useState, useRef, useEffect } from "react";
-import { Bot, Copy, Send, Sparkles, X, Loader2 } from "lucide-react";
-import { useLanguage } from "../i18n/i18n";
+import { Bot, Send, Sparkles, X, Loader2 } from "lucide-react";
 import { askAssistant } from "../services/api";
+import "./AiAssistant.css";
 
 const prompts = [
   "Generate Ramadan fundraising message",
@@ -18,15 +18,15 @@ interface ChatMessage {
 }
 
 export function AiAssistant() {
-  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const messagesContainer = messagesScrollRef.current;
+    if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
   }, [messages, isGenerating]);
 
   async function handleSend(promptText: string) {
@@ -55,32 +55,34 @@ export function AiAssistant() {
 
   return (
     <>
-      <button className="ai-fab" type="button" onClick={() => setOpen(true)}>
-        <Bot size={20} />
-        Ask Masjid AI
-      </button>
+      {!open ? (
+        <button className="ai-fab" type="button" aria-haspopup="dialog" onClick={() => setOpen(true)}>
+          <Bot size={20} />
+          Ask Masjid AI
+        </button>
+      ) : null}
       {open ? (
-        <div className="ai-panel" role="dialog" aria-label="Ask Masjid AI" style={{display: 'flex', flexDirection: 'column'}}>
+        <div className="ai-panel" id="masjid-ai-panel" role="dialog" aria-labelledby="masjid-ai-title">
           <div className="ai-panel-header">
             <div>
               <span className="eyebrow">MasjidPro Assistant</span>
-              <h3>Live AI Chat</h3>
+              <h3 id="masjid-ai-title">Live AI Chat</h3>
             </div>
-            <button type="button" className="icon-button" onClick={() => setOpen(false)}>
+            <button type="button" className="icon-button" aria-label="Close AI chat" onClick={() => setOpen(false)}>
               <X size={18} />
             </button>
           </div>
 
-          <div className="ai-messages-scroll" style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div className="ai-messages-scroll" ref={messagesScrollRef}>
             {messages.length === 0 ? (
               <>
-                <div className="ai-message" style={{ margin: 0 }}>
+                <div className="ai-message">
                   <Sparkles size={16} />
                   <p>
                     I can use backend dashboard data to help with donations, announcements, and giving trends.
                   </p>
                 </div>
-                <div className="prompt-grid" style={{ marginTop: '0.5rem' }}>
+                <div className="prompt-grid">
                   {prompts.map((prompt) => (
                     <button
                       className="prompt"
@@ -95,31 +97,21 @@ export function AiAssistant() {
               </>
             ) : (
               messages.map(msg => (
-                <div key={msg.id} style={{
-                  alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                  backgroundColor: msg.role === 'user' ? '#0f766e' : '#f1f5f9',
-                  color: msg.role === 'user' ? 'white' : '#0f172a',
-                  padding: '0.75rem 1rem',
-                  borderRadius: '0.75rem',
-                  maxWidth: '85%',
-                  lineHeight: 1.5,
-                  fontSize: '0.875rem'
-                }}>
-                  {msg.role === 'assistant' && <Bot size={14} style={{marginBottom: '4px', opacity: 0.7}}/>}
-                  <div style={{whiteSpace: 'pre-wrap'}}>{msg.text}</div>
+                <div className={`ai-chat-message ${msg.role}`} key={msg.id}>
+                  {msg.role === 'assistant' ? <Bot size={14} /> : null}
+                  <div>{msg.text}</div>
                 </div>
               ))
             )}
 
             {isGenerating && (
-              <div style={{ alignSelf: 'flex-start', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem' }}>
+              <div className="ai-thinking">
                 <Loader2 size={16} className="spin" /> AI is thinking...
               </div>
             )}
-            <div ref={messagesEndRef} />
           </div>
 
-          <div className="ai-input" style={{ borderTop: '1px solid #e2e8f0', padding: '1rem', margin: 0 }}>
+          <div className="ai-input">
             <input
               value={input}
               onChange={(event) => setInput(event.target.value)}
