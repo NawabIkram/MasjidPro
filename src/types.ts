@@ -3,10 +3,28 @@
   name: string;
   location: string;
   method: string;
+  country?: string;
+  city?: string;
+  address?: string;
+  timezone?: string;
+  calculationMethod?: string;
+  asrMethod?: string;
 };
 
 export type UserRole = "admin" | "donor";
 export type Language = "en" | "ar";
+
+export type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: UserRole;
+  masjidIds: string[];
+  preferredMasjidId: string;
+  createdAt: string;
+  updatedAt?: string;
+};
 
 export type DonationStatus = "Completed" | "Pending" | "Refunded";
 export type FundType = "Zakat" | "Sadaqah" | "General" | "Building";
@@ -83,6 +101,36 @@ export type AuditLogEntry = {
   user: string;
   action: string;
   status: "Success" | "Pending" | "Failed";
+};
+
+export type RecurringDonation = {
+  id: string;
+  masjidId: string;
+  donorUserId: string;
+  donorEmail: string;
+  amount: number;
+  fund: FundType;
+  frequency: "Weekly" | "Monthly";
+  status: "Active" | "Paused";
+  nextPayment: string;
+  createdAt: string;
+};
+
+export type WorkspaceSettings = {
+  masjidId: string;
+  name: string;
+  country: string;
+  city: string;
+  address: string;
+  location: string;
+  timezone: string;
+  calculationMethod: string;
+  asrMethod: string;
+  emailNotifications: boolean;
+  pushNotifications: boolean;
+  smsNotifications: boolean;
+  receiptGeneration: boolean;
+  updatedAt: string;
 };
 
 export type PricingPlan = {
