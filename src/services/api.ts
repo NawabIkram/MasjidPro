@@ -60,6 +60,27 @@ export type DonorRegistrationInput = {
   masjidId: string;
 };
 
+export type GoogleAuthInput =
+  | { credential: string; mode: "sign-in" }
+  | { credential: string; mode: "donor"; masjidId: string; phone?: string }
+  | {
+      credential: string;
+      mode: "masjid";
+      masjidName: string;
+      country: string;
+      city: string;
+      address: string;
+      timezone: string;
+      calculationMethod: string;
+      asrMethod: string;
+      phone?: string;
+    };
+
+export type GoogleAuthConfig = {
+  clientId: string;
+  ready: boolean;
+};
+
 export class ApiError extends Error {
   status: number;
 
@@ -223,6 +244,14 @@ export function getCurrentSession() {
 
 export function loginAccount(input: { email: string; password: string }) {
   return apiRequest<AuthSession>("/auth/login", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function getGoogleAuthConfig() {
+  return apiRequest<GoogleAuthConfig>("/auth/google-config");
+}
+
+export function continueWithGoogleAccount(input: GoogleAuthInput) {
+  return apiRequest<AuthSession>("/auth/google", { method: "POST", body: JSON.stringify(input) });
 }
 
 export function registerMasjidAccount(input: MasjidRegistrationInput) {
