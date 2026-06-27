@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
@@ -6,6 +6,8 @@ import {
   Bot,
   Calculator,
   ChevronDown,
+  Globe,
+  HandCoins,
   LayoutDashboard,
   LogOut,
   Megaphone,
@@ -13,25 +15,19 @@ import {
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  ReceiptText,
+  Repeat2,
   Search,
   Settings,
   ShieldCheck,
-  ReceiptText,
-  Repeat2,
-  HandCoins,
   UserRound,
   UsersRound,
   WalletCards,
-  Users,
-  CalendarDays,
-  Globe,
 } from "lucide-react";
-import { masjids } from "../data/mockData";
-import type { Masjid, UserRole } from "../types";
-import { AiAssistant } from "./AiAssistant";
+import { useAuth } from "../auth/AuthContext";
 import { useLanguage } from "../i18n/i18n";
+import { AiAssistant } from "./AiAssistant";
 import { Modal, Toast } from "./ui";
-import { getMasjids } from "../services/api";
 
 const adminNavItems = [
   { to: "/dashboard", key: "nav_dashboard", mobileKey: "mobile_home", icon: LayoutDashboard },
@@ -41,8 +37,6 @@ const adminNavItems = [
   { to: "/announcements", key: "nav_announcements", mobileKey: "mobile_news", icon: Megaphone },
   { to: "/reports", key: "nav_reports", mobileKey: "mobile_reports", icon: BarChart3 },
   { to: "/donors", key: "nav_donors", mobileKey: "nav_donors", icon: UsersRound },
-  { to: "/staff", key: "nav_staff", mobileKey: "nav_staff", icon: Users },
-  { to: "/events", key: "nav_events", mobileKey: "nav_events", icon: CalendarDays },
   { to: "/settings", key: "nav_settings", mobileKey: "nav_settings", icon: Settings },
 ];
 
@@ -59,39 +53,36 @@ const donorNavItems = [
 
 export function AppShell() {
   const { t, lang, setLang } = useLanguage();
+  const { user, masjids, logout, selectMasjid } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const startsAsDonor = ["/donor-portal", "/donate", "/my-donations", "/receipts", "/recurring", "/profile"].includes(
-    location.pathname,
-  );
   const [collapsed, setCollapsed] = useState(false);
-  const [activeRole, setActiveRole] = useState<UserRole>(startsAsDonor ? "donor" : "admin");
-  const [availableMasjids, setAvailableMasjids] = useState<Masjid[]>(masjids);
-  const [activeMasjid, setActiveMasjid] = useState<Masjid>(masjids[0]);
   const [showSearch, setShowSearch] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [toast, setToast] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const activeRole = user?.role ?? "admin";
+  const activeMasjid = masjids.find((masjid) => masjid.id === user?.preferredMasjidId) ?? masjids[0];
   const navItems = activeRole === "admin" ? adminNavItems : donorNavItems;
-
-  useEffect(() => {
-    let mounted = true;
-    getMasjids().then((data) => {
-      if (mounted && data.length > 0) {
-        setAvailableMasjids(data);
-        setActiveMasjid((current) => data.find((masjid) => masjid.id === current.id) ?? data[0]);
-      }
-    });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   const title = useMemo(() => {
     const active = [...adminNavItems, ...donorNavItems].find((item) => item.to === location.pathname);
-    return active ? t(active.key as any) : t("nav_dashboard");
+    return active ? t(active.key as never) : t("nav_dashboard");
   }, [location.pathname, t]);
+
+  if (!user || !activeMasjid) return null;
+
+  const initials = user.name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  const signOut = async () => {
+    await logout();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <div className="app-layout">
@@ -107,7 +98,7 @@ export function AppShell() {
           {navItems.map((item) => (
             <NavLink key={item.to} to={item.to}>
               <item.icon size={20} />
-              <span>{t(item.key as any)}</span>
+              <span>{t(item.key as never)}</span>
             </NavLink>
           ))}
         </nav>
@@ -116,10 +107,10 @@ export function AppShell() {
             <ShieldCheck size={18} />
             <span>{t("privacyReady")}</span>
           </div>
-          <NavLink to="/login" className="logout-link">
+          <button type="button" className="logout-link" onClick={() => void signOut()}>
             <LogOut size={18} />
             <span>{t("signOut")}</span>
-          </NavLink>
+          </button>
         </div>
       </aside>
 
@@ -142,36 +133,17 @@ export function AppShell() {
           </div>
           <label className="masjid-selector">
             <span>{t("masjid")}</span>
-            <select
-              value={activeMasjid.id}
-              onChange={(event) => {
-                const next = availableMasjids.find((masjid) => masjid.id === event.target.value);
-                if (next) setActiveMasjid(next);
-              }}
-            >
-              {availableMasjids.map((masjid) => (
-                <option key={masjid.id} value={masjid.id}>
-                  {masjid.name}
-                </option>
+            <select value={activeMasjid.id} onChange={(event) => void selectMasjid(event.target.value)}>
+              {masjids.map((masjid) => (
+                <option key={masjid.id} value={masjid.id}>{masjid.name}</option>
               ))}
             </select>
             <ChevronDown size={16} />
           </label>
-          <label className="role-selector">
+          <div className="role-selector role-badge">
             <span>{t("role")}</span>
-            <select
-              value={activeRole}
-              onChange={(event) => {
-                const nextRole = event.target.value as UserRole;
-                setActiveRole(nextRole);
-                navigate(nextRole === "admin" ? "/dashboard" : "/donor-portal");
-              }}
-            >
-              <option value="admin">{t("admin")}</option>
-              <option value="donor">{t("donor")}</option>
-            </select>
-            <ChevronDown size={16} />
-          </label>
+            <strong>{activeRole === "admin" ? t("admin") : t("donor")}</strong>
+          </div>
 
           <div className="topbar-actions">
             <button className="search-button" type="button" onClick={() => setShowSearch(true)}>
@@ -190,7 +162,7 @@ export function AppShell() {
             <button className="icon-button" type="button" aria-label={t("notifications")} onClick={() => setToast("No unread notifications.")}>
               <Bell size={20} />
             </button>
-            <div className="avatar">IA</div>
+            <div className="avatar" title={user.name}>{initials}</div>
           </div>
         </header>
 
@@ -209,7 +181,7 @@ export function AppShell() {
         {navItems.slice(0, 5).map((item) => (
           <NavLink key={item.to} to={item.to}>
             <item.icon size={20} />
-            <span>{t(item.mobileKey as any)}</span>
+            <span>{t(item.mobileKey as never)}</span>
           </NavLink>
         ))}
         <NavLink to={activeRole === "admin" ? "/reports" : "/profile"}>
@@ -235,33 +207,16 @@ export function AppShell() {
             <div className="mobile-menu-context">
               <label>
                 <span>{t("masjid")}</span>
-                <select
-                  value={activeMasjid.id}
-                  onChange={(event) => {
-                    const next = availableMasjids.find((masjid) => masjid.id === event.target.value);
-                    if (next) setActiveMasjid(next);
-                  }}
-                >
-                  {availableMasjids.map((masjid) => (
+                <select value={activeMasjid.id} onChange={(event) => void selectMasjid(event.target.value)}>
+                  {masjids.map((masjid) => (
                     <option key={masjid.id} value={masjid.id}>{masjid.name}</option>
                   ))}
                 </select>
               </label>
-              <label>
+              <div className="mobile-role-display">
                 <span>{t("role")}</span>
-                <select
-                  value={activeRole}
-                  onChange={(event) => {
-                    const nextRole = event.target.value as UserRole;
-                    setActiveRole(nextRole);
-                    navigate(nextRole === "admin" ? "/dashboard" : "/donor-portal");
-                    setShowMobileMenu(false);
-                  }}
-                >
-                  <option value="admin">{t("admin")}</option>
-                  <option value="donor">{t("donor")}</option>
-                </select>
-              </label>
+                <strong>{activeRole === "admin" ? t("admin") : t("donor")}</strong>
+              </div>
             </div>
 
             <label className="mobile-menu-search">
@@ -271,11 +226,11 @@ export function AppShell() {
 
             <nav className="mobile-menu-grid" aria-label="All mobile navigation">
               {navItems
-                .filter((item) => t(item.key as any).toLowerCase().includes(searchQuery.toLowerCase()) || item.to.includes(searchQuery.toLowerCase()))
+                .filter((item) => t(item.key as never).toLowerCase().includes(searchQuery.toLowerCase()) || item.to.includes(searchQuery.toLowerCase()))
                 .map((item) => (
                   <NavLink key={item.to} to={item.to} onClick={() => setShowMobileMenu(false)}>
                     <item.icon size={18} />
-                    <span>{t(item.key as any)}</span>
+                    <span>{t(item.key as never)}</span>
                   </NavLink>
                 ))}
             </nav>
@@ -291,7 +246,7 @@ export function AppShell() {
             </label>
             <div className="quick-actions">
               {navItems
-                .filter((item) => t(item.key as any).toLowerCase().includes(searchQuery.toLowerCase()) || item.to.includes(searchQuery.toLowerCase()))
+                .filter((item) => t(item.key as never).toLowerCase().includes(searchQuery.toLowerCase()) || item.to.includes(searchQuery.toLowerCase()))
                 .map((item) => (
                   <button
                     key={item.to}
@@ -302,7 +257,7 @@ export function AppShell() {
                     }}
                   >
                     <item.icon size={18} />
-                    {t(item.key as any)}
+                    {t(item.key as never)}
                   </button>
                 ))}
             </div>
