@@ -28,7 +28,9 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/demo" element={<DemoPage />} />
-          <Route path="/checkout/:planId" element={<CheckoutPage />} />
+          <Route element={<ProtectedRoute role="admin" />}>
+            <Route path="/checkout/:planId" element={<CheckoutPage />} />
+          </Route>
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
               <Route path="/prayer-times" element={<PrayerTimesPage />} />
