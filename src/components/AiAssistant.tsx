@@ -1,5 +1,7 @@
 ﻿import { useState, useRef, useEffect } from "react";
 import { Bot, Send, Sparkles, X, Loader2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { askAssistant } from "../services/api";
 import "./AiAssistant.css";
 
@@ -39,15 +41,17 @@ export function AiAssistant() {
     setIsGenerating(true);
 
     try {
-      // Pass previous chat history context to the backend assistant.
-      const chatContext = messages.map(m => `${m.role === 'user' ? 'Admin' : 'Assistant'}: ${m.text}`).join('\n');
-      const fullPrompt = `${chatContext ? `Previous Chat:\n${chatContext}\n\n` : ''}Admin: ${text}\nAssistant:`;
+      const recentConversation = [...messages, userMsg]
+        .slice(-6)
+        .map((message) => `${message.role === "user" ? "User" : "Assistant"}: ${message.text}`)
+        .join("\n\n");
 
-      const responseText = await askAssistant(fullPrompt);
+      const responseText = await askAssistant(recentConversation);
       const aiMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: "assistant", text: responseText };
       setMessages(prev => [...prev, aiMsg]);
-    } catch (error: any) {
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", text: `Error: ${error.message}` }]);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "The assistant is temporarily unavailable.";
+      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", text: message }]);
     } finally {
       setIsGenerating(false);
     }
@@ -73,7 +77,7 @@ export function AiAssistant() {
             </button>
           </div>
 
-          <div className="ai-messages-scroll" ref={messagesScrollRef}>
+          <div className="ai-messages-scroll" ref={messagesScrollRef} aria-live="polite">
             {messages.length === 0 ? (
               <>
                 <div className="ai-message">
@@ -99,7 +103,11 @@ export function AiAssistant() {
               messages.map(msg => (
                 <div className={`ai-chat-message ${msg.role}`} key={msg.id}>
                   {msg.role === 'assistant' ? <Bot size={14} /> : null}
-                  <div>{msg.text}</div>
+                  {msg.role === "assistant" ? (
+                    <div className="ai-markdown">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+                    </div>
+                  ) : <div>{msg.text}</div>}
                 </div>
               ))
             )}
