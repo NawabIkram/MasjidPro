@@ -20,6 +20,15 @@ import { getGoogleAuthConfig, verifyGoogleCredential } from "./lib/google-auth.m
 import { defaultPrayerTimes, defaultSettings, ensureSeedData } from "./lib/seed.mjs";
 import { deleteJSON, getJSON, listJSON, setJSON, storageMode } from "./lib/storage.mjs";
 import { configuredAIProviders, enforceAIRateLimit, generateAI } from "./lib/ai.mjs";
+import {
+  applyStripeEvent,
+  confirmCheckoutSession,
+  constructStripeEvent,
+  createCheckoutSession,
+  createCustomerPortalSession,
+  getBillingStatus,
+  getStripeConfig,
+} from "./lib/billing.mjs";
 
 const json = (statusCode, payload, headers = {}) => ({
   statusCode,
@@ -46,6 +55,7 @@ const parseBody = (event) => {
 const cleanString = (value, maxLength = 200) => String(value ?? "").trim().slice(0, maxLength);
 const now = () => new Date().toISOString();
 const byNewest = (a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""));
+const appOrigin = () => String(process.env.URL ?? process.env.DEPLOY_PRIME_URL ?? "http://127.0.0.1:5173").replace(/\/$/, "");
 
 const requireFields = (body, fields) => {
   const missing = fields.filter((field) => !cleanString(body[field]));
@@ -350,11 +360,45 @@ export async function handler(event) {
     }
     if (resource === "auth") return await handleAuth(event, id);
 
+    if (resource === "billing" && id === "webhook" && event.httpMethod === "POST") {
+      const signature = event.headers?.["stripe-signature"] ?? event.headers?.["Stripe-Signature"];
+      const rawBody = event.isBase64Encoded ? Buffer.from(event.body ?? "", "base64") : event.body ?? "";
+      const stripeEvent = constructStripeEvent(rawBody, signature);
+      await applyStripeEvent(stripeEvent);
+      return json(200, { received: true });
+    }
+
+    if (resource === "billing" && id === "config" && event.httpMethod === "GET") {
+      return json(200, { data: getStripeConfig() });
+    }
+
     if (resource === "masjids" && event.httpMethod === "GET") {
       return json(200, { data: (await listJSON("masjids/")).sort((a, b) => a.name.localeCompare(b.name)) });
     }
 
     const user = requireUser(await getSessionUser(event));
+
+    if (resource === "billing") {
+      requireUser(user, "admin");
+      const body = ["POST", "PATCH"].includes(event.httpMethod) ? parseBody(event) : {};
+      const { masjidId, masjid } = await getWorkspace(user, body.masjidId ?? event.queryStringParameters?.masjidId);
+
+      if (id === "status" && event.httpMethod === "GET") {
+        return json(200, { data: await getBillingStatus(masjidId) });
+      }
+      if (id === "checkout" && event.httpMethod === "POST") {
+        return json(200, { data: await createCheckoutSession({ masjidId, masjidName: masjid.name, user, planId: body.planId, origin: appOrigin() }) });
+      }
+      if (id === "confirm" && event.httpMethod === "POST") {
+        const billing = await confirmCheckoutSession({ masjidId, sessionId: body.sessionId });
+        await addAudit(masjidId, `${billing.planName} subscription activated`, user);
+        return json(200, { data: billing });
+      }
+      if (id === "portal" && event.httpMethod === "POST") {
+        return json(200, { data: await createCustomerPortalSession({ masjidId, origin: appOrigin() }) });
+      }
+      throw Object.assign(new Error("Billing route not found."), { statusCode: 404 });
+    }
 
     if (resource === "dashboard" && event.httpMethod === "GET") {
       requireUser(user, "admin");
@@ -624,7 +668,7 @@ export async function handler(event) {
 
     return json(404, { error: "API route not found." });
   } catch (error) {
-    if (!error.statusCode || error.statusCode >= 500) console.error("MasjidPro API error", error);
+    if (!error.operational && (!error.statusCode || error.statusCode >= 500)) console.error("MasjidPro API error", error);
     return json(error.statusCode ?? 500, { error: error.message || "Unexpected API error." });
   }
 }
