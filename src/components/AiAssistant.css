@@ -66,8 +66,58 @@
   overflow-wrap: anywhere;
 }
 
-.ai-chat-message > div {
+.ai-chat-message.user > div {
   white-space: pre-wrap;
+}
+
+.ai-markdown {
+  min-width: 0;
+}
+
+.ai-markdown > :first-child {
+  margin-top: 0;
+}
+
+.ai-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.ai-markdown p {
+  margin: 0 0 10px;
+}
+
+.ai-markdown ul,
+.ai-markdown ol {
+  margin: 8px 0 10px;
+  padding-left: 20px;
+}
+
+.ai-markdown li + li {
+  margin-top: 5px;
+}
+
+.ai-markdown a {
+  color: #0f766e;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ai-markdown table {
+  display: block;
+  width: 100%;
+  margin: 10px 0;
+  border-collapse: collapse;
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+.ai-markdown th,
+.ai-markdown td {
+  border: 1px solid #cbd5e1;
+  padding: 6px 8px;
+  text-align: left;
+  white-space: nowrap;
 }
 
 .ai-chat-message svg {
