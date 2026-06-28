@@ -2139,6 +2139,86 @@ input[type="checkbox"] {
   color: #005c55;
 }
 
+.checkout-workspace {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+  background: #f8fafc;
+}
+
+.checkout-workspace div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.checkout-workspace span,
+.billing-summary span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.checkout-workspace strong {
+  overflow-wrap: anywhere;
+}
+
+.checkout-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-weight: 750;
+}
+
+.checkout-help,
+.checkout-terms,
+.settings-note {
+  margin: 0;
+  font-size: 13px;
+}
+
+.checkout-feature-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checkout-feature-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #334155;
+  font-size: 14px;
+}
+
+.checkout-feature-list svg {
+  flex: 0 0 auto;
+  color: #0f766e;
+}
+
+.billing-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.billing-summary > div {
+  display: grid;
+  gap: 4px;
+}
+
+.billing-summary strong {
+  font-size: 20px;
+}
+
 .trust-strip.mini {
   box-shadow: none;
   padding: 0;
@@ -2294,6 +2374,10 @@ input[type="checkbox"] {
   .public-hero {
     min-height: auto;
     padding: 42px 0 24px;
+  }
+
+  .checkout-workspace {
+    grid-template-columns: 1fr;
   }
 
   .public-nav {
