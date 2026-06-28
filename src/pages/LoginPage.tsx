@@ -12,7 +12,7 @@ import {
   ShieldCheck,
   UserRound,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { GoogleSignInButton } from "../components/GoogleSignInButton";
 import { Toast } from "../components/ui";
@@ -46,6 +46,13 @@ const initialDonor: DonorRegistrationInput = {
 export function LoginPage() {
   const { user, login, continueWithGoogle, registerMasjid, registerDonor } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const requestedPlan = searchParams.get("plan");
+  const stateFrom = typeof location.state?.from === "string" ? location.state.from : "";
+  const adminDestination = requestedPlan && ["starter", "growth", "pro"].includes(requestedPlan)
+    ? `/checkout/${requestedPlan}`
+    : stateFrom.startsWith("/checkout/") ? stateFrom : "/dashboard";
   const [activeTab, setActiveTab] = useState<AuthTab>("signin");
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
@@ -57,8 +64,8 @@ export function LoginPage() {
   const [donorForm, setDonorForm] = useState(initialDonor);
 
   useEffect(() => {
-    if (user) navigate(user.role === "admin" ? "/dashboard" : "/donor-portal", { replace: true });
-  }, [navigate, user]);
+    if (user) navigate(user.role === "admin" ? adminDestination : "/donor-portal", { replace: true });
+  }, [adminDestination, navigate, user]);
 
   useEffect(() => {
     getMasjids().then((records) => {
@@ -76,7 +83,7 @@ export function LoginPage() {
     setNotice("");
     try {
       const account = await action();
-      navigate(account.role === "admin" ? "/dashboard" : "/donor-portal", { replace: true });
+      navigate(account.role === "admin" ? adminDestination : "/donor-portal", { replace: true });
     } catch (caught) {
       if (onFailure?.(caught)) return;
       setError(caught instanceof Error ? caught.message : "Unable to complete this request.");
