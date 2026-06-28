@@ -1450,6 +1450,17 @@ input[type="checkbox"] {
   font-weight: 700;
 }
 
+.auth-notice {
+  border: 1px solid #99f6e4;
+  border-radius: 12px;
+  background: #f0fdfa;
+  color: #115e59;
+  padding: 11px 13px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .auth-loading {
   min-height: 100vh;
   display: grid;
@@ -1579,7 +1590,16 @@ input[type="checkbox"] {
 
 .google-auth > .secondary-button {
   position: absolute;
-  inset: 0;
+  inset: 0 0 auto;
+  min-height: 44px;
+}
+
+.google-auth-message {
+  margin: 8px 0 0;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .form-grid .wide {
