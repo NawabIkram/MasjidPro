@@ -1,8 +1,11 @@
 import { CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { pricingPlans } from "../data/mockData";
 
 export function PricingPage() {
+  const { user } = useAuth();
+
   return (
     <main className="public-page">
       <nav className="public-nav">
@@ -37,8 +40,11 @@ export function PricingPage() {
                 </li>
               ))}
             </ul>
-            <Link className={plan.highlighted ? "primary-button full" : "secondary-button full"} to={`/checkout/${plan.id}`}>
-              Choose {plan.name}
+            <Link
+              className={plan.highlighted ? "primary-button full" : "secondary-button full"}
+              to={user?.role === "admin" ? `/checkout/${plan.id}` : user ? "/donor-portal" : `/login?plan=${plan.id}`}
+            >
+              {user?.role === "donor" ? "Masjid admin plans" : `Choose ${plan.name}`}
             </Link>
           </article>
         ))}
