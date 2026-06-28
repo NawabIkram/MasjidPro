@@ -15,7 +15,7 @@ export function PricingPage() {
         </Link>
         <div>
           <Link to="/demo">Demo</Link>
-          <Link to="/login">Login</Link>
+          <Link to={user ? user.role === "admin" ? "/dashboard" : "/donor-portal" : "/login"}>{user ? "Workspace" : "Login"}</Link>
         </div>
       </nav>
 
@@ -40,12 +40,16 @@ export function PricingPage() {
                 </li>
               ))}
             </ul>
-            <Link
-              className={plan.highlighted ? "primary-button full" : "secondary-button full"}
-              to={user?.role === "admin" ? `/checkout/${plan.id}` : user ? "/donor-portal" : `/login?plan=${plan.id}`}
-            >
-              {user?.role === "donor" ? "Masjid admin plans" : `Choose ${plan.name}`}
-            </Link>
+            {user?.role === "donor" ? (
+              <span className={`${plan.highlighted ? "primary-button" : "secondary-button"} full disabled-action`} aria-disabled="true">Admin account required</span>
+            ) : (
+              <Link
+                className={plan.highlighted ? "primary-button full" : "secondary-button full"}
+                to={user?.role === "admin" ? `/checkout/${plan.id}` : `/login?plan=${plan.id}`}
+              >
+                Choose {plan.name}
+              </Link>
+            )}
           </article>
         ))}
       </section>
