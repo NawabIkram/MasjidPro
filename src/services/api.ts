@@ -23,6 +23,7 @@ import type {
   FundType,
   Masjid,
   PrayerTime,
+  PricingPlan,
   ReportMetric,
   RecurringDonation,
   WorkspaceSettings,
@@ -79,6 +80,24 @@ export type GoogleAuthInput =
 export type GoogleAuthConfig = {
   clientId: string;
   ready: boolean;
+};
+
+export type BillingStatus = {
+  checkoutReady: boolean;
+  webhookReady: boolean;
+  planId: PricingPlan["id"] | null;
+  planName: string;
+  monthlyPrice: number;
+  currency: "USD";
+  status: "inactive" | "incomplete" | "incomplete_expired" | "trialing" | "active" | "past_due" | "canceled" | "unpaid" | "paused";
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  synced: boolean;
+};
+
+export type BillingConfig = {
+  ready: boolean;
+  webhookReady: boolean;
 };
 
 export class ApiError extends Error {
@@ -252,6 +271,32 @@ export function getGoogleAuthConfig() {
 
 export function continueWithGoogleAccount(input: GoogleAuthInput) {
   return apiRequest<AuthSession>("/auth/google", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function getBillingConfig() {
+  return apiRequest<BillingConfig>("/billing/config");
+}
+
+export function getBillingStatus() {
+  return apiRequest<BillingStatus>("/billing/status");
+}
+
+export function createBillingCheckout(planId: PricingPlan["id"]) {
+  return apiRequest<{ url: string; sessionId: string }>("/billing/checkout", {
+    method: "POST",
+    body: JSON.stringify({ planId }),
+  });
+}
+
+export function confirmBillingCheckout(sessionId: string) {
+  return apiRequest<BillingStatus>("/billing/confirm", {
+    method: "POST",
+    body: JSON.stringify({ sessionId }),
+  });
+}
+
+export function createBillingPortal() {
+  return apiRequest<{ url: string }>("/billing/portal", { method: "POST", body: "{}" });
 }
 
 export function registerMasjidAccount(input: MasjidRegistrationInput) {
