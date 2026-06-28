@@ -16,7 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { GoogleSignInButton } from "../components/GoogleSignInButton";
 import { Toast } from "../components/ui";
-import { getMasjids } from "../services/api";
+import { ApiError, getMasjids } from "../services/api";
 import type { DonorRegistrationInput, GoogleAuthInput, MasjidRegistrationInput } from "../services/api";
 import type { Masjid } from "../types";
 
@@ -49,6 +49,7 @@ export function LoginPage() {
   const [activeTab, setActiveTab] = useState<AuthTab>("signin");
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [masjids, setMasjids] = useState<Masjid[]>([]);
   const [signin, setSignin] = useState({ email: "", password: "" });
@@ -66,13 +67,18 @@ export function LoginPage() {
     });
   }, []);
 
-  const runAuth = async (action: () => Promise<{ role: "admin" | "donor" }>) => {
+  const runAuth = async (
+    action: () => Promise<{ role: "admin" | "donor" }>,
+    onFailure?: (caught: unknown) => boolean,
+  ) => {
     setSubmitting(true);
     setError("");
+    setNotice("");
     try {
       const account = await action();
       navigate(account.role === "admin" ? "/dashboard" : "/donor-portal", { replace: true });
     } catch (caught) {
+      if (onFailure?.(caught)) return;
       setError(caught instanceof Error ? caught.message : "Unable to complete this request.");
     } finally {
       setSubmitting(false);
@@ -108,7 +114,15 @@ export function LoginPage() {
     } else {
       input = { credential, mode: "sign-in" };
     }
-    void runAuth(() => continueWithGoogle(input));
+    void runAuth(
+      () => continueWithGoogle(input),
+      (caught) => {
+        if (mode !== "signin" || !(caught instanceof ApiError) || caught.status !== 404) return false;
+        setActiveTab("donor");
+        setNotice("This Google account is new. Select a masjid and choose Sign up with Google to create a donor account, or use Register Masjid for an administrator account.");
+        return true;
+      },
+    );
   };
 
   return (
@@ -131,12 +145,13 @@ export function LoginPage() {
         </div>
 
         <div className="auth-tabs" role="tablist" aria-label="Authentication options">
-          <button className={activeTab === "signin" ? "active" : ""} type="button" onClick={() => { setActiveTab("signin"); setError(""); }}>Sign In</button>
-          <button className={activeTab === "masjid" ? "active" : ""} type="button" onClick={() => { setActiveTab("masjid"); setError(""); }}>Register Masjid</button>
-          <button className={activeTab === "donor" ? "active" : ""} type="button" onClick={() => { setActiveTab("donor"); setError(""); }}>Donor Register</button>
+          <button className={activeTab === "signin" ? "active" : ""} type="button" onClick={() => { setActiveTab("signin"); setError(""); setNotice(""); }}>Sign In</button>
+          <button className={activeTab === "masjid" ? "active" : ""} type="button" onClick={() => { setActiveTab("masjid"); setError(""); setNotice(""); }}>Register Masjid</button>
+          <button className={activeTab === "donor" ? "active" : ""} type="button" onClick={() => { setActiveTab("donor"); setError(""); setNotice(""); }}>Donor Register</button>
         </div>
 
         {error ? <div className="auth-error" role="alert">{error}</div> : null}
+        {notice ? <div className="auth-notice" role="status">{notice}</div> : null}
 
         {activeTab === "signin" ? (
           <form onSubmit={(event) => { event.preventDefault(); void runAuth(() => login(signin.email, signin.password)); }}>
@@ -154,7 +169,11 @@ export function LoginPage() {
             </div>
             <button className="primary-button full" disabled={submitting} type="submit">{submitting ? "Signing in..." : "Sign In"}<ArrowRight size={18} /></button>
             <AuthDivider />
-            <GoogleSignInButton disabled={submitting} onCredential={(credential) => runGoogleAuth(credential, "signin")} />
+            <GoogleSignInButton
+              disabled={submitting}
+              onCredential={(credential) => runGoogleAuth(credential, "signin")}
+              onStart={() => { setError(""); setNotice(""); }}
+            />
             <div className="auth-ctas">
               <button type="button" onClick={() => setActiveTab("masjid")}>New Masjid? Register your Masjid</button>
               <button type="button" onClick={() => setActiveTab("donor")}>Donor? Create donor account</button>
