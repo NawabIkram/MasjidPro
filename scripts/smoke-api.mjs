@@ -28,6 +28,10 @@ assert.equal(googleConfig.status, 200);
 assert.equal(typeof googleConfig.payload.data.ready, "boolean");
 assert.equal(googleConfig.payload.data.ready, Boolean(googleConfig.payload.data.clientId));
 
+const billingConfig = await call("GET", "/billing/config");
+assert.equal(billingConfig.status, 200);
+assert.equal(typeof billingConfig.payload.data.ready, "boolean");
+
 const adminRegistration = await call("POST", "/auth/register-masjid", {
   body: {
     masjidName: "Phase 2 QA Masjid",
@@ -49,6 +53,25 @@ const adminCookie = adminRegistration.cookie.split(";")[0];
 const masjidId = adminRegistration.payload.data.masjids[0].id;
 const session = await call("GET", "/auth/me", { cookie: adminCookie });
 assert.equal(session.payload.data.user.email, adminEmail);
+
+const inactiveBilling = await call("GET", "/billing/status", { cookie: adminCookie });
+assert.equal(inactiveBilling.status, 200);
+assert.equal(inactiveBilling.payload.data.status, "inactive");
+assert.equal(inactiveBilling.payload.data.checkoutReady, Boolean(process.env.STRIPE_SECRET_KEY));
+
+const invalidCheckout = await call("POST", "/billing/checkout", {
+  cookie: adminCookie,
+  body: { planId: "enterprise" },
+});
+assert.equal(invalidCheckout.status, 422);
+
+if (!process.env.STRIPE_SECRET_KEY) {
+  const unavailableCheckout = await call("POST", "/billing/checkout", {
+    cookie: adminCookie,
+    body: { planId: "growth" },
+  });
+  assert.equal(unavailableCheckout.status, 503);
+}
 
 const settings = await call("PATCH", "/settings", {
   cookie: adminCookie,
@@ -109,6 +132,9 @@ assert.equal(donorHistory.payload.data.length, 2);
 
 const forbiddenDashboard = await call("GET", "/dashboard", { cookie: donorCookie, query: { masjidId } });
 assert.equal(forbiddenDashboard.status, 403);
+
+const forbiddenBilling = await call("GET", "/billing/status", { cookie: donorCookie });
+assert.equal(forbiddenBilling.status, 403);
 
 await call("POST", "/auth/logout", { cookie: donorCookie, body: {} });
 const afterLogout = await call("GET", "/auth/me", { cookie: donorCookie });
