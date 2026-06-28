@@ -2053,6 +2053,12 @@ input[type="checkbox"] {
   transform: translateY(-8px);
 }
 
+.disabled-action {
+  cursor: not-allowed;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .pricing-card ul,
 .demo-card ol {
   display: grid;
