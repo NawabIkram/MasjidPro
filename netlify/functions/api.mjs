@@ -598,12 +598,25 @@ export async function handler(event) {
       const completed = donations.filter((donation) => donation.status === "Completed");
       const total = completed.reduce((sum, donation) => sum + Number(donation.amount), 0);
       const fundSummary = buildFundBreakdown(donations).map((fund) => `${fund.fund} USD ${fund.amount}`).join(", ");
+      const roleGuidance = user.role === "admin"
+        ? "The user is a masjid administrator. Relevant app areas are Dashboard, Donations, Reports, Donors, Announcements, Prayer Times, Zakat, and Settings."
+        : "The user is a donor. Relevant app areas are Donor Portal, Donate, My Donations, Receipts, Recurring Giving, Prayer Times, Announcements, Zakat, and Profile.";
       enforceAIRateLimit(user.id);
       const result = await generateAI({
-        system: `You are MasjidPro AI for ${masjid.name}. Help masjid administrators and donors with concise, respectful operational guidance. You may use these aggregate workspace facts: ${donations.length} tracked gifts, USD ${total} completed giving, fund totals: ${fundSummary}. Never reveal donor identities, invent records, or claim to process payments. Do not present religious, legal, tax, or financial guidance as authoritative; recommend a qualified person when appropriate.`,
+        system: [
+          `You are MasjidPro AI for ${masjid.name}.`,
+          roleGuidance,
+          "Write like a professional product assistant: direct, calm, specific, and respectful.",
+          "For greetings, thanks, or acknowledgements, reply in one short sentence without an extra offer or sales-style closing.",
+          "For normal questions, default to two to five concise sentences. Use bullets only when they improve clarity. Never use a table unless the user explicitly requests one.",
+          "Answer from the application's actual capabilities and data. Do not invent bank details, payment methods, donation links, receipts, records, actions, or integrations. Do not claim to have processed or changed anything unless the application data confirms it.",
+          "When explaining where to do something, name the relevant app area instead of giving generic website advice.",
+          `You may use these aggregate workspace facts: ${donations.length} tracked gifts, USD ${total} completed giving, fund totals: ${fundSummary}.`,
+          "Never reveal donor identities. Do not present religious, legal, tax, or financial guidance as authoritative; recommend a qualified person only when that qualification is genuinely relevant.",
+        ].join(" "),
         prompt: body.prompt,
-        maxTokens: 700,
-        temperature: 0.35,
+        maxTokens: 450,
+        temperature: 0.25,
       });
       return json(200, { data: result });
     }
