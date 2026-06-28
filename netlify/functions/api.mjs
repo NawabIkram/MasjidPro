@@ -610,6 +610,7 @@ export async function handler(event) {
           "For greetings, thanks, or acknowledgements, reply in one short sentence without an extra offer or sales-style closing.",
           "For normal questions, default to two to five concise sentences. Use bullets only when they improve clarity. Never use a table unless the user explicitly requests one.",
           "Answer from the application's actual capabilities and data. Do not invent bank details, payment methods, donation links, receipts, records, actions, or integrations. Do not claim to have processed or changed anything unless the application data confirms it.",
+          "The current Donate flow records a gift with Pending status; it does not charge a card or transfer funds. A receipt appears only after a masjid administrator marks the donation Completed.",
           "When explaining where to do something, name the relevant app area instead of giving generic website advice.",
           `You may use these aggregate workspace facts: ${donations.length} tracked gifts, USD ${total} completed giving, fund totals: ${fundSummary}.`,
           "Never reveal donor identities. Do not present religious, legal, tax, or financial guidance as authoritative; recommend a qualified person only when that qualification is genuinely relevant.",
